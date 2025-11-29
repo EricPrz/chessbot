@@ -1,6 +1,9 @@
+#include <cctype>
 #include <chrono>
 #include <cstddef>
 #include <cstdio>
+#include <memory>
+#include <regex>
 #include <unordered_map>
 #include <iostream>
 #include <ostream>
@@ -37,7 +40,7 @@ const int SIZE = 8;
 enum Color { white, black };
 enum PieceType { Rook, Bishop, Knight, Queen, King, Pawn, none };
 enum MoveType { Illegal, Move, Capture, Enroque, Promocion };
-enum PieceLetter {p, r, b, n, k, q, P, R, B, N, K, Q};
+enum PieceLetter {p, r, b, n, k, q, P, R, B, N, K, Q, _};
 
 struct Piece {
     PieceType piece;
@@ -82,6 +85,68 @@ Piece piece_at(Position pos, Board board){
     return piece_to_board[piece];
 }
 
+std::vector<char> fenn_to_row(std::string fen){
+    std::vector<char> row;
+
+    int count = 0;
+    auto end = fen.end();
+    auto begin = fen.begin();
+
+    while (begin != end){
+	char lowerC = std::tolower(*begin);
+	if (lowerC <= '9' && lowerC >= '0'){
+	    int a = lowerC-'0';
+	    for (int i = 0; i < a; i++){
+		row.push_back('_');
+		std::cout << '_';
+	    }
+	} else {
+	    row.push_back(*begin);
+	    std::cout << *begin;
+	}
+	++count;
+	++begin;
+    }
+
+    std::cout << std::endl;
+
+    return row;
+}
+
+void board_from_fen(std::string fen){
+    Board board;
+
+    std::string fenn = "r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3";
+    std::regex re("[\\w-]+");
+
+    std::sregex_iterator begin = std::sregex_iterator(fenn.begin(), fenn.end(), re);
+    std::sregex_iterator end;
+
+    int count = 0;
+
+    // Iterate over all matches and extract the text between slashes
+    while (begin != end) {
+        // Get the match object
+        std::smatch m = *begin;
+
+
+	if (count < 8){
+	    // Decode to board a row	
+	    std::vector<char>row = fenn_to_row(m.str());
+	    board.board.push_back(row);
+	} else {
+	    std::cout << m.str() << std::endl;
+	}
+
+        // Move to the next match
+        ++begin;
+	++count;
+    }
+
+    std::cout << count << std::endl;
+
+}
+
 class Game {
 private:
     Board board;
@@ -116,9 +181,8 @@ public:
 
 int main(){
     Game game;
-    Piece p = piece_at(Position(0, 2), game.get_board());
 
-    std::cout << p.piece << std::endl;
+    board_from_fen("r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3");
 
     std::thread m(read_smth);
     std::thread t(print_smth);
@@ -126,6 +190,5 @@ int main(){
     t.join();
     m.join();
 
-    std::cout << "Hello World" << std::endl;
     return 0;
 }
