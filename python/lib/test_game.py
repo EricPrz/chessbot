@@ -1,4 +1,4 @@
-from game import Game
+from .game import Game
 
 def test_initial_position():
     """Test that initial position is correct."""

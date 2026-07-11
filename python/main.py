@@ -1,7 +1,7 @@
-from game import Game
+from lib.game import Game
 
 # Create a game
-game = Game()
+game = Game(fen="rnbqkbnr/pppp1ppp/8/4p3/4P3/2N5/PPPP1PPP/R1BQKBNR b KQkq - 1 2")
 
 # Generate all legal moves as new states
 legal_states = game.get_legal_moves()

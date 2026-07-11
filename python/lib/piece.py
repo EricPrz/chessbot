@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from typing import List, Optional, TYPE_CHECKING
 
-from enums import PieceType, Color
-from position import Position
+from .enums import PieceType, Color
+from .position import Position
 
 if TYPE_CHECKING:
     from board import Board

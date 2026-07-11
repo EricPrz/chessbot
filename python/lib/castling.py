@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from enums import Color
+from .enums import Color
 
 @dataclass
 class CastlingRights:

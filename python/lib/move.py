@@ -1,9 +1,10 @@
 from dataclasses import dataclass, field
 from typing import Optional
 
-from position import Position
-from piece import Piece
-from enums import PieceType
+from .position import Position
+from .piece import Piece
+from .enums import PieceType
+from .board import Board
 
 @dataclass
 class Move:

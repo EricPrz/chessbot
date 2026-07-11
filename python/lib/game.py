@@ -1,11 +1,11 @@
 from typing import List, Optional, Tuple
 
-from board import Board
-from enums import Color, PieceType
-from castling import CastlingRights
-from position import Position
-from move import Move
-from piece import Piece
+from .enums import Color, PieceType
+from .castling import CastlingRights
+from .position import Position
+from .move import Move
+from .piece import Piece
+from .board import Board
 
 class Game:
     def __init__(self, board: Optional[Board] = None, fen: Optional[str] = None):

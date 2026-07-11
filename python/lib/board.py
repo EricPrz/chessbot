@@ -1,8 +1,8 @@
 from typing import Optional, Dict, List
 
-from enums import Color, PieceType
-from position import Position
-from piece import Piece
+from .enums import Color, PieceType
+from .position import Position
+from .piece import Piece
 
 
 class Board:
