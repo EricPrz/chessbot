@@ -52,7 +52,7 @@ class Board:
         # Check for pawn attacks
         pawn_direction = 1 if by_color == Color.WHITE else -1
         for dx in [-1, 1]:
-            attack_pos = Position(pos.x + dx, pos.y + pawn_direction)
+            attack_pos = Position(pos.x + dx, pos.y - pawn_direction)
             if attack_pos.is_valid():
                 piece = self.get_piece(attack_pos)
                 if piece and piece.color == by_color and piece.type == PieceType.PAWN:
@@ -77,7 +77,7 @@ class Board:
             while current.is_valid():
                 piece = self.get_piece(current)
                 if piece:
-                    if piece.color == by_color and piece.type in [PieceType.BISHOP, PieceType.QUEEN]:
+                    if piece.color == by_color and piece.type in (PieceType.BISHOP, PieceType.QUEEN):
                         return True
                     break
                 current = Position(current.x + dx, current.y + dy)
