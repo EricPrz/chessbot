@@ -11,6 +11,13 @@ class Position:
     
     def to_uci(self) -> str:
         return f"{chr(ord('a') + self.x)}{self.y + 1}"
+
+    def offset(self, dx: int, dy: int) -> 'Position | None':
+        """Create a new position with offset, returns None if invalid."""
+        new_pos = Position(self.x + dx, self.y + dy)
+        if new_pos.is_valid():
+            return new_pos
+        return None
     
     @staticmethod
     def from_uci(s: str) -> 'Position':

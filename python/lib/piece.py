@@ -82,6 +82,7 @@ class Piece:
                 if board.is_occupied_by_color(current, self.color.opposite()):
                     break
                 current = Position(current.x + dx, current.y + dy)
+
         return moves
     
     def _get_king_moves(self, pos: Position, board: 'Board') -> List[Position]:

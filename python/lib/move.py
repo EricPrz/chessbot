@@ -56,5 +56,7 @@ class Move:
         )
     
     def __str__(self) -> str:
-        return self.to_uci()
+        # return self.to_uci()
+        return f"{self.from_pos, self.to_pos}"
+
 

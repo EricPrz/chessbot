@@ -133,14 +133,14 @@ class Game:
                         promo_move = move.copy()
                         promo_move.promotion = pt
                         promotion_moves.append(promo_move)
-        
+
         if promotion_moves:
             # Replace pawn moves with promotion moves
             moves = [m for m in moves if not 
-                    ((m.to_pos.y == 7 and m.piece.color == Color.WHITE) or
-                     (m.to_pos.y == 0 and m.piece.color == Color.BLACK))]
+                    ((m.to_pos.y == 7 and m.piece.color == Color.WHITE and m.piece.type == PieceType.PAWN) or
+                     (m.to_pos.y == 0 and m.piece.color == Color.BLACK and m.piece.type == PieceType.PAWN))]
             moves.extend(promotion_moves)
-        
+
         return moves
     
     def _get_castling_moves(self) -> List[Move]:
@@ -336,14 +336,14 @@ class Game:
                     self.castling.black_queenside = False
             elif move.piece.type == PieceType.ROOK:
                 if move.from_pos.x == 0:  # Queenside rook
-                    if self.turn == Color.WHITE:
+                    if self.turn == Color.WHITE and move.from_pos.y == 0:
                         self.castling.white_queenside = False
-                    else:
+                    elif self.turn == Color.BLACK and move.from_pos.y == 7:
                         self.castling.black_queenside = False
                 elif move.from_pos.x == 7:  # Kingside rook
-                    if self.turn == Color.WHITE:
+                    if self.turn == Color.WHITE and move.from_pos.y == 0:
                         self.castling.white_kingside = False
-                    else:
+                    elif self.turn == Color.BLACK and move.from_pos.y == 7:
                         self.castling.black_kingside = False
         
         # Switch turn
