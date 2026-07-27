@@ -1,0 +1,1 @@
+/home/eric/Projects/chessbot/rust/target/debug/rust: /home/eric/Projects/chessbot/rust/src/board.rs /home/eric/Projects/chessbot/rust/src/enums.rs /home/eric/Projects/chessbot/rust/src/main.rs /home/eric/Projects/chessbot/rust/src/position.rs
