@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 
-use crate::piece::Piece;
-
 #[derive(Clone, Copy)]
 pub enum Square {
     A8 = 0,
@@ -222,6 +220,44 @@ impl Square {
         let rev_index = self.clone() as u8 / 8;
         8 - rev_index
     }
+
+    pub fn get_col_index(&self) -> u8 {
+        let rev_index = self.clone() as u8 % 8;
+        8 - rev_index
+    }
+
+    pub fn is_valid(&self) -> bool {
+        self.to_index() < 64 && self.to_index() >= 0
+    }
+}
+
+pub fn get_positions_from_bitboard(_bitboard: &u64) -> Vec<u8> {
+    let mut bitboard = _bitboard.clone();
+    let mut positions: Vec<u8> = Vec::new();
+
+    while bitboard != 0 {
+        // Isolate the MSB
+        let msb = bitboard & bitboard.wrapping_neg();
+
+        // Find the square index (0-63)
+        let position = 63 - msb.leading_zeros() as u8;
+        positions.push(position);
+
+        // Remove the processed bit
+        bitboard ^= msb;
+    }
+
+    positions
+}
+
+pub fn get_squares_from_bitboard(_bitboard: &u64) -> Vec<Square> {
+    let positions = get_positions_from_bitboard(_bitboard);
+    let squares = positions
+        .into_iter()
+        .map(|position| Square::square_from_number(position))
+        .collect();
+
+    squares
 }
 
 #[derive(PartialEq, Clone, Copy)]
@@ -259,6 +295,18 @@ pub enum PieceType {
 }
 
 impl PieceType {
+    pub fn from_char(char: char) -> Self {
+        match char.to_ascii_lowercase() {
+            'p' => Self::PAWN,
+            'n' => Self::KNIGHT,
+            'b' => Self::BISHOP,
+            'r' => Self::ROOK,
+            'q' => Self::QUEEN,
+            'k' => Self::KING,
+            _ => panic!("Invalid piece character: {}", char),
+        }
+    }
+
     pub fn to_char(&self) -> char {
         let piece_map: HashMap<PieceType, char> = HashMap::from([
             (PieceType::PAWN, 'p'),

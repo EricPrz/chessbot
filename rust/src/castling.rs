@@ -1,6 +1,6 @@
-mod board;
+use crate::enums::Color;
 
-struct CastlingRights {
+pub struct CastlingRights {
     white_kingside: bool,
     black_kingside: bool,
     white_queenside: bool,
@@ -8,8 +8,17 @@ struct CastlingRights {
 }
 
 impl CastlingRights {
+    pub fn new() -> Self {
+        Self {
+            white_kingside: true,
+            black_kingside: true,
+            white_queenside: true,
+            black_queenside: true,
+        }
+    }
+
     fn get_for_color(&self, color: &Color) -> (bool, bool) {
-        if color == Color::WHITE {
+        if color == &Color::WHITE {
             return (self.white_kingside, self.white_queenside);
         } else {
             return (self.black_kingside, self.black_queenside);

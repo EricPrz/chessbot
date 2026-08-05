@@ -1,13 +1,16 @@
+use crate::board::Board;
 use crate::enums::Color;
 use crate::enums::Color::BLACK;
 use crate::enums::Color::WHITE;
 use crate::enums::PieceType;
+use crate::enums::Square;
+use crate::enums::get_squares_from_bitboard;
 use crate::moves;
+use crate::moves::Move;
 use crate::piece;
 
 use super::board;
 use super::enums;
-use super::position;
 
 use std::vec;
 
@@ -25,14 +28,41 @@ impl Piece {
         }
     }
 
+    pub fn from_char(c: char) -> Piece {
+        let color = if c.is_ascii_uppercase() {
+            enums::Color::WHITE
+        } else {
+            enums::Color::BLACK
+        };
+
+        let piece_type = PieceType::from_char(c.to_ascii_lowercase());
+        Piece::new(piece_type, color)
+    }
+
     fn get_pseudo_legal_moves(&self, board: &board::Board) -> vec::Vec<moves::Move> {
         match self.piece_type {
             enums::PieceType::PAWN => self.get_pawn_moves(board),
-            enums::PieceType::KNIGHT => self.get_knight_moves(pos, board),
-            enums::PieceType::BISHOP => self.get_sliding_moves(pos, board),
-            enums::PieceType::ROOK => self.get_sliding_moves(pos, board),
-            enums::PieceType::QUEEN => self.get_sliding_moves(pos, board),
-            enums::PieceType::KING => self.get_king_moves(pos, board),
+            enums::PieceType::KNIGHT => self.get_knight_moves(board),
+            enums::PieceType::BISHOP => {
+                self.get_sliding_moves(board, &[(1, 1), (1, -1), (-1, 1), (-1, -1)])
+            }
+            enums::PieceType::ROOK => {
+                self.get_sliding_moves(board, &[(1, 0), (-1, 0), (0, 1), (0, -1)])
+            }
+            enums::PieceType::QUEEN => self.get_sliding_moves(
+                board,
+                &[
+                    (1, 0),
+                    (-1, 0),
+                    (0, 1),
+                    (0, -1),
+                    (1, 1),
+                    (1, -1),
+                    (-1, 1),
+                    (-1, -1),
+                ],
+            ),
+            enums::PieceType::KING => self.get_king_moves(board),
         }
     }
 
@@ -293,7 +323,128 @@ impl Piece {
         moves
     }
 
-    fn get_king_moves(&self, board: &board::Board) -> u64 {}
+    fn get_king_moves(&self, board: &board::Board) -> Vec<Move> {
+        let mut moves: Vec<Move> = Vec::new();
+        let king_moves = KingMoves::new();
+
+        let color = &self.color;
+        let enemy_bitboard = match color {
+            enums::Color::WHITE => board.get_blacks(),
+            enums::Color::BLACK => board.get_whites(),
+        };
+        let king = match color {
+            enums::Color::WHITE => board.get_white_king(),
+            enums::Color::BLACK => board.get_black_king(),
+        };
+
+        let squares = get_squares_from_bitboard(&king);
+        let from_square = squares.get(0).expect("There should be only one king.");
+
+        let king_moves_bit = king_moves.moves[from_square.to_index() as usize];
+        let mut king_moves = king_moves_bit & (enemy_bitboard | board.get_empty());
+
+        let piece = piece::Piece::new(enums::PieceType::KING, color.clone());
+
+        while king_moves != 0 {
+            let msb = king_moves & king_moves.wrapping_neg();
+            let to_square_num = 63 - msb.leading_zeros() as usize;
+            let to_square = enums::Square::square_from_number(to_square_num as u8);
+
+            let captured = board.get_piece_at_square(to_square);
+
+            let _move = moves::Move::new(
+                from_square.clone(),
+                to_square,
+                piece.clone(),
+                captured,
+                None,
+                false,
+                false,
+            );
+            moves.push(_move);
+
+            king_moves ^= msb;
+        }
+
+        moves
+    }
+
+    fn get_sliding_moves(&self, board: &Board, directions: &[(i32, i32)]) -> Vec<Move> {
+        let mut moves: Vec<Move> = vec::Vec::new();
+        let color = self.color;
+
+        let bitboard = board.get_piece_bitboard(self);
+        let numbers = enums::get_positions_from_bitboard(&bitboard);
+
+        for number in numbers {
+            let from_pos = Square::square_from_number(number);
+            for (dx, dy) in directions {
+                let mut to_pos = Square::square_from_number((number as i32 - dy * 8 + dx) as u8);
+
+                while to_pos.is_valid() {
+                    let piece_at_target = board.get_piece_at_square(to_pos);
+
+                    if piece_at_target.is_none() {
+                        let _move = Move::new(
+                            from_pos,
+                            to_pos,
+                            board
+                                .get_piece_at_square(to_pos)
+                                .expect("F at getting piece at a square it was supposed to be one"),
+                            None,
+                            None,
+                            false,
+                            false,
+                        );
+                        moves.push(_move);
+
+                        let temp_number = to_pos.to_index() as i32;
+                        to_pos = Square::square_from_number((temp_number - dy * 8 + dx) as u8);
+
+                        continue;
+                    }
+
+                    if piece_at_target
+                        .expect("Previous if that contradicts none")
+                        .color
+                        == color.opposite()
+                    {
+                        let _move = Move::new(
+                            from_pos,
+                            to_pos,
+                            board
+                                .get_piece_at_square(to_pos)
+                                .expect("F at getting piece at a square it was supposed to be one"),
+                            piece_at_target,
+                            None,
+                            false,
+                            false,
+                        );
+                        moves.push(_move);
+
+                        break;
+                    }
+
+                    if piece_at_target
+                        .expect("Previous if that contradicts none")
+                        .color
+                        == color
+                    {
+                        break;
+                    }
+                }
+            }
+        }
+        moves
+    }
+
+    pub fn to_char(&self) -> char {
+        let c = self.piece_type.to_char();
+        match self.color {
+            WHITE => c.to_ascii_uppercase(),
+            BLACK => c.to_ascii_lowercase(),
+        }
+    }
 }
 
 pub struct KnightMoves {
@@ -375,6 +526,53 @@ impl PawnCaptureMoves {
         let mut i = 0;
         while i < 2 {
             let (new_row, new_col) = pawn_capture_moves[i];
+            if new_row >= 0 && new_row < 8 && new_col >= 0 && new_col < 8 {
+                let new_square = (new_row * 8 + new_col) as usize;
+                result |= 1u64 << new_square;
+            }
+            i += 1;
+        }
+
+        result
+    }
+}
+
+pub struct KingMoves {
+    pub moves: [u64; 64],
+}
+
+impl KingMoves {
+    pub const fn new() -> Self {
+        let mut moves = [0u64; 64];
+        let mut square = 0;
+
+        while square < 64 {
+            moves[square] = Self::calculate_king_moves(square);
+            square += 1;
+        }
+
+        Self { moves }
+    }
+
+    const fn calculate_king_moves(square: usize) -> u64 {
+        let mut result = 0u64;
+        let row = square / 8;
+        let col = square % 8;
+
+        let king_moves = [
+            (row + 1, col + 1),
+            (row + 1, col),
+            (row + 1, col - 1),
+            (row, col + 1),
+            (row, col - 1),
+            (row - 1, col + 1),
+            (row - 1, col),
+            (row - 1, col - 1),
+        ];
+
+        let mut i = 0;
+        while i < 8 {
+            let (new_row, new_col) = king_moves[i];
             if new_row >= 0 && new_row < 8 && new_col >= 0 && new_col < 8 {
                 let new_square = (new_row * 8 + new_col) as usize;
                 result |= 1u64 << new_square;

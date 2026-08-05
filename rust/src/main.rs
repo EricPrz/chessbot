@@ -1,6 +1,7 @@
 mod board;
 mod castling;
 mod enums;
+mod game;
 mod moves;
 mod piece;
 mod position;

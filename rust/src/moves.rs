@@ -1,3 +1,5 @@
+use crate::enums::PieceType::PAWN;
+
 use super::enums;
 use super::piece;
 
@@ -12,15 +14,23 @@ pub struct Move {
 }
 
 impl Move {
-    pub fn new(from_pos: enums::Square, to_pos: enums::Square, piece: piece::Piece, captured: Option<piece::Piece>, promotion: Option<enums::PieceType>, is_castle: bool, is_en_passant: bool) -> Move {
+    pub fn new(
+        from_pos: enums::Square,
+        to_pos: enums::Square,
+        piece: piece::Piece,
+        captured: Option<piece::Piece>,
+        promotion: Option<enums::PieceType>,
+        is_castle: bool,
+        is_en_passant: bool,
+    ) -> Move {
         Move {
-            from_pos:  from_pos,
-            to_pos:  to_pos,
-            piece:  piece,
-            captured:  captured,
-            promotion:  promotion,
-            is_castle:  is_castle,
-            is_en_passant:  is_en_passant,
+            from_pos: from_pos,
+            to_pos: to_pos,
+            piece: piece,
+            captured: captured,
+            promotion: promotion,
+            is_castle: is_castle,
+            is_en_passant: is_en_passant,
         }
     }
 
@@ -38,31 +48,48 @@ impl Move {
 
     fn to_san(&self) -> String {
         if self.is_castle {
-            if self.to_pos.x > self.from_pos.x {
+            if self.to_pos.get_col_index() > self.from_pos.get_col_index() {
                 String::from("0-0")
             } else {
                 String::from("0-0-0")
             };
         }
 
-        let piece_char: char = if self.piece.type == PieceType::PAWN { "" } else self.piece.type.to_char().to_uppercase();
+        let mut piece_char: String = if self.piece.piece_type == PAWN {
+            String::new()
+        } else {
+            self.piece
+                .piece_type
+                .to_char()
+                .to_ascii_uppercase()
+                .to_string()
+        };
 
-        let capture: char = if self.captured || self.is_en_passant { "x" } else { "" };
+        let capture: String = if self.captured.is_some() || self.is_en_passant {
+            'x'.to_string()
+        } else {
+            String::new()
+        };
 
-        let promotion = "";
-        if Some(self.promotion) {
-            let promotion = self.promotion.to_char().to_uppercase(); 
-        }
+        let promotion: String = match self.promotion {
+            Some(p) => p.to_char().to_ascii_uppercase().to_string(),
+            None => String::new(),
+        };
 
-        if self.piece.tipe == PieceType::PAWN && capture == "x" {
-            let piece_char = self.from_pos.to_uci()[0];
+        if self.piece.piece_type == PAWN && capture == "x" {
+            piece_char = self
+                .from_pos
+                .to_uci()
+                .get(..1)
+                .expect("There should be something when returning uci move")
+                .to_string();
         }
 
         let mut san: String = String::new();
-        san += &piece_char.to_string();
+        san += &piece_char;
         san += &capture.to_string();
         san += &self.to_pos.to_uci();
-        san += promotion;
+        san += &promotion;
 
         return san;
     }
