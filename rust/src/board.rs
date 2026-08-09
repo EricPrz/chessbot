@@ -3,9 +3,10 @@ use std::vec;
 use crate::{
     enums::{
         Color::{self, BLACK, WHITE},
-        PieceType::{BISHOP, KING, KNIGHT, PAWN, QUEEN, ROOK},
+        PieceType::{self, BISHOP, KING, KNIGHT, PAWN, QUEEN, ROOK},
         Square, get_squares_from_bitboard,
     },
+    moves::Move,
     piece::Piece,
 };
 
@@ -446,6 +447,10 @@ impl Board {
         &mut self.king_black
     }
 
+    pub fn get_mutable_en_passant(&mut self) -> &mut u64 {
+        &mut self.en_passant
+    }
+
     pub fn to_fen(&self) -> String {
         let mut fen = String::new();
 
@@ -497,5 +502,27 @@ impl Board {
         }
 
         board
+    }
+
+    pub fn is_attacked(&self, square: Square, by_color: Color) -> bool {
+        for piece_type in PieceType::iter() {
+            if piece_type == KING {
+                continue;
+            }
+
+            let piece = Piece::new(piece_type, by_color);
+            let moves = piece.get_pseudo_legal_moves(self);
+
+            let attacking_moves: Vec<Move> = moves
+                .into_iter()
+                .filter(|m| m.get_to_pos() == square)
+                .collect();
+
+            if attacking_moves.len() > 0 {
+                return true;
+            }
+        }
+
+        false
     }
 }

@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-#[derive(Clone, Copy)]
+use crate::enums::Color::{BLACK, WHITE};
+
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Square {
     A8 = 0,
     B8 = 1,
@@ -69,6 +71,10 @@ pub enum Square {
 }
 
 impl Square {
+    pub fn new(x: u8, y: u8) -> Square {
+        let number = x + y * 8;
+        Square::square_from_number(number)
+    }
     pub fn square_from_number(num: u8) -> Square {
         match num {
             0 => Square::A8,
@@ -208,6 +214,31 @@ impl Square {
         }
     }
 
+    pub fn from_uci(uci: &str) -> Self {
+        if uci.len() != 2 {
+            panic!("UCI position is not 2 char long")
+        }
+
+        let file = uci.chars().next().expect("UCI should have file");
+        let rank = uci.chars().nth(1).expect("UCI should have rank");
+
+        // Prüfe, ob der File-Char (a-h) und der Rank-Char (1-8) gültig sind
+        if !('a'..='h').contains(&file) || !('1'..='8').contains(&rank) {
+            panic!("UCI is not valid")
+        }
+
+        // Konvertiere den File-Char in einen Index (0-7)
+        let file_index = (file as u8 - b'a') as usize;
+        // Konvertiere den Rank-Char in einen Index (0-7)
+        let rank_index = (rank as u8 - b'1') as usize;
+
+        // Berechne den Index des Squares (0 = A1, 1 = B1, ..., 63 = H8)
+        let index = rank_index * 8 + file_index;
+
+        // Konvertiere den Index zurück in das Square-Enum
+        Square::square_from_number(index as u8)
+    }
+
     pub fn square_to_number(square: Square) -> u8 {
         square as u8
     }
@@ -250,6 +281,14 @@ pub fn get_positions_from_bitboard(_bitboard: &u64) -> Vec<u8> {
     positions
 }
 
+pub fn get_bitboard_from_square(square: Square) -> u64 {
+    // Convert the Square to a position number (0-63)
+    let position = square.to_index();
+
+    // Set the bit at the corresponding position
+    1u64 << position
+}
+
 pub fn get_squares_from_bitboard(_bitboard: &u64) -> Vec<Square> {
     let positions = get_positions_from_bitboard(_bitboard);
     let squares = positions
@@ -279,8 +318,16 @@ impl Color {
         panic!("No Color matched.")
     }
 
-    fn to_char(&self) -> char {
+    pub fn to_char(&self) -> char {
         if self == &Color::WHITE { 'w' } else { 'b' }
+    }
+
+    pub fn from_char(char: &str) -> Color {
+        match char {
+            "w" => WHITE,
+            "b" => BLACK,
+            _ => panic!("Char {} doesn't match with a color", char),
+        }
     }
 }
 

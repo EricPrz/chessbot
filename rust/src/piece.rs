@@ -21,7 +21,7 @@ pub struct Piece {
 }
 
 impl Piece {
-    fn new(piece_type: enums::PieceType, color: enums::Color) -> Piece {
+    pub fn new(piece_type: enums::PieceType, color: enums::Color) -> Piece {
         Piece {
             piece_type: piece_type,
             color: color,
@@ -39,7 +39,7 @@ impl Piece {
         Piece::new(piece_type, color)
     }
 
-    fn get_pseudo_legal_moves(&self, board: &board::Board) -> vec::Vec<moves::Move> {
+    pub fn get_pseudo_legal_moves(&self, board: &board::Board) -> vec::Vec<moves::Move> {
         match self.piece_type {
             enums::PieceType::PAWN => self.get_pawn_moves(board),
             enums::PieceType::KNIGHT => self.get_knight_moves(board),

@@ -1,16 +1,17 @@
 use crate::enums::PieceType::PAWN;
+use crate::enums::Square;
 
 use super::enums;
 use super::piece;
 
 pub struct Move {
-    from_pos: enums::Square,
-    to_pos: enums::Square,
-    piece: piece::Piece,
-    captured: Option<piece::Piece>,
-    promotion: Option<enums::PieceType>,
-    is_castle: bool,
-    is_en_passant: bool,
+    pub from_pos: enums::Square,
+    pub to_pos: enums::Square,
+    pub piece: piece::Piece,
+    pub captured: Option<piece::Piece>,
+    pub promotion: Option<enums::PieceType>,
+    pub is_castle: bool,
+    pub is_en_passant: bool,
 }
 
 impl Move {
@@ -34,7 +35,15 @@ impl Move {
         }
     }
 
-    fn to_uci(&self) -> String {
+    pub fn get_to_pos(&self) -> Square {
+        self.to_pos
+    }
+
+    pub fn get_piece(&self) -> Piece {
+        self.piece
+    }
+
+    pub fn to_uci(&self) -> String {
         let mut uci = String::new();
         uci += &self.from_pos.to_uci();
         uci += &self.to_pos.to_uci();

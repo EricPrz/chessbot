@@ -1,10 +1,10 @@
 use crate::enums::Color;
 
 pub struct CastlingRights {
-    white_kingside: bool,
-    black_kingside: bool,
-    white_queenside: bool,
-    black_queenside: bool,
+    pub white_kingside: bool,
+    pub black_kingside: bool,
+    pub white_queenside: bool,
+    pub black_queenside: bool,
 }
 
 impl CastlingRights {
@@ -17,7 +17,7 @@ impl CastlingRights {
         }
     }
 
-    fn get_for_color(&self, color: &Color) -> (bool, bool) {
+    pub fn get_for_color(&self, color: &Color) -> (bool, bool) {
         if color == &Color::WHITE {
             return (self.white_kingside, self.white_queenside);
         } else {
@@ -25,7 +25,7 @@ impl CastlingRights {
         }
     }
 
-    fn to_string(&self) -> String {
+    pub fn to_string(&self) -> String {
         let mut castlings = String::new();
 
         if self.white_kingside {
@@ -49,5 +49,14 @@ impl CastlingRights {
         }
 
         return castlings;
+    }
+
+    pub fn from_string(string: String) -> CastlingRights {
+        CastlingRights {
+            white_kingside: string.find('W').is_some(),
+            black_kingside: string.find('B').is_some(),
+            white_queenside: string.find('w').is_some(),
+            black_queenside: string.find('b').is_some(),
+        }
     }
 }

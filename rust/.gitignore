@@ -1,0 +1,6 @@
+# Rust build artifacts
+target/
+
+# Backup / temporary files
+**/*.rs.bk
+*.swp
