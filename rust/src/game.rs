@@ -12,7 +12,7 @@ use crate::{
     piece::Piece,
 };
 
-struct Game {
+pub struct Game {
     board: Board,
     turn: Color,
     castling: CastlingRights,
@@ -22,7 +22,7 @@ struct Game {
 }
 
 impl Game {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             board: Board::new(),
             turn: WHITE,
@@ -34,7 +34,7 @@ impl Game {
     }
 
     // to do
-    fn from_fen(fen: String) -> Self {
+    pub fn from_fen(fen: String) -> Self {
         let mut game = Self::new();
 
         let fen_string: Vec<&str> = fen.split(" ").collect();
@@ -78,21 +78,21 @@ impl Game {
         game
     }
 
-    fn get_legal_moves(&self) -> Vec<Move> {
+    pub fn get_legal_moves(&self) -> Vec<Move> {
         self._generate_pseudo_legal_moves()
             .into_iter()
             .filter(|m| self._is_legal_move(m))
             .collect()
     }
 
-    fn get_legal_moves_uci(&self) -> Vec<String> {
+    pub fn get_legal_moves_uci(&self) -> Vec<String> {
         self.get_legal_moves()
             .into_iter()
             .map(|m| m.to_uci())
             .collect()
     }
 
-    fn _generate_pseudo_legal_moves(&self) -> Vec<Move> {
+    pub fn _generate_pseudo_legal_moves(&self) -> Vec<Move> {
         let mut pseudo_legal_moves = Vec::new();
 
         for piece_type in PieceType::iter() {
@@ -106,10 +106,56 @@ impl Game {
 
     // to do
     fn _is_legal_move(&self, move_: &Move) -> bool {
-        true
+        if !move_.from_pos.is_valid() || !move_.to_pos.is_valid() {
+            return false;
+        }
+
+        // Create a copy of the board
+        let mut board_copy = self.board.clone();
+
+        // Make the move on the copy
+        let piece = board_copy.get_piece_at_square(move_.from_pos);
+        if piece.is_none() {
+            return false;
+        }
+
+        // Special handling for castling
+        if move_.is_castle {
+            // Move king
+            board_copy.move_piece(move_.from_pos, move_.to_pos);
+
+            // Move rook
+            if move_.to_pos.get_col_index() > move_.from_pos.get_col_index() {
+                board_copy.move_piece(
+                    Square::new(7, move_.from_pos.get_row_index()),
+                    Square::new(5, move_.from_pos.get_row_index()),
+                );
+            } else {
+                board_copy.move_piece(
+                    Square::new(0, move_.from_pos.get_row_index()),
+                    Square::new(3, move_.from_pos.get_row_index()),
+                );
+            }
+        } else {
+            // Move piece
+            board_copy.move_piece(move_.from_pos, move_.to_pos);
+
+            // Handle en passant capture
+            if move_.is_en_passant {
+                let captured_pos =
+                    Square::new(move_.to_pos.get_col_index(), move_.from_pos.get_row_index());
+                board_copy.remove_piece_at_square(captured_pos, Piece::new(PAWN, self.turn));
+                // board_copy.set_piece(captured_pos, None)
+            }
+        }
+
+        // Check if our king is in check after this move
+        let king_pos = board_copy.find_king(self.turn);
+
+        return !board_copy.is_attacked(king_pos, self.turn.opposite());
     }
 
-    fn _apply_move(&mut self, move_: Move) {
+    pub fn _apply_move(&mut self, move_: Move) {
         // Update halfmove clock
         if move_.get_piece().piece_type == PAWN || move_.captured.is_some() {
             self.half_move_clock = 0
@@ -226,33 +272,33 @@ impl Game {
         }
     }
 
-    fn is_check(&self) -> bool {
+    pub fn is_check(&self) -> bool {
         let king_pos = self.board.find_king(self.turn);
 
         return self.board.is_attacked(king_pos, self.turn.opposite());
     }
 
-    fn is_checkmate(&self) -> bool {
+    pub fn is_checkmate(&self) -> bool {
         if !self.is_check() {
             return false;
         }
         return self.get_legal_moves().len() == 0;
     }
 
-    fn is_stalemate(&self) -> bool {
+    pub fn is_stalemate(&self) -> bool {
         if self.is_check() {
             return false;
         }
         return self.get_legal_moves().len() == 0;
     }
 
-    fn is_draw(&self) -> bool {
+    pub fn is_draw(&self) -> bool {
         self.half_move_clock >= 100 || self.is_stalemate()
     }
 
-    fn get_fen(&self) -> String {}
+    // pub fn get_fen(&self) -> String {}
 
-    fn get_pgn(&self) -> String {}
+    // pub fn get_pgn(&self) -> String {}
 
-    fn get_nnue_encoding(&self) {}
+    // pub fn get_nnue_encoding(&self) {}
 }

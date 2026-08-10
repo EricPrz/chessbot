@@ -1,5 +1,6 @@
 use crate::enums::PieceType::PAWN;
 use crate::enums::Square;
+use crate::piece::Piece;
 
 use super::enums;
 use super::piece;

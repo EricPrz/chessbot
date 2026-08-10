@@ -10,7 +10,7 @@ use crate::{
     piece::Piece,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Board {
     pawns_white: u64,
     pawns_black: u64,

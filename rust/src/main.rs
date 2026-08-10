@@ -1,3 +1,5 @@
+use crate::game::Game;
+
 mod board;
 mod castling;
 mod enums;
@@ -8,8 +10,11 @@ mod position;
 
 fn main() {
     println!("Hello, world!");
-    let position = position::Position { x: 0, y: 0 };
-    let ay = position;
-    let ay = ay.offset(3, 2).unwrap().to_uci();
-    println!("{ay}");
+
+    let game = Game::new();
+    let legal_moves = game.get_legal_moves_uci();
+
+    for move_ in legal_moves {
+        println!("{}", move_);
+    }
 }
