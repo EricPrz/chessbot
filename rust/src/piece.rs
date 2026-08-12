@@ -3,6 +3,7 @@ use crate::enums::Color;
 use crate::enums::Color::BLACK;
 use crate::enums::Color::WHITE;
 use crate::enums::PieceType;
+use crate::enums::PieceType::PAWN;
 use crate::enums::Square;
 use crate::enums::get_squares_from_bitboard;
 use crate::moves;
@@ -66,7 +67,7 @@ impl Piece {
         }
     }
 
-    fn get_pawn_moves(&self, board: &board::Board) -> Vec<moves::Move> {
+    pub fn get_pawn_moves(&self, board: &board::Board) -> Vec<moves::Move> {
         let color = self.color;
 
         let pawns = match color {
@@ -82,8 +83,8 @@ impl Piece {
 
         // One forward
         let mut one_forward = match color {
-            WHITE => pawns << 8,
-            BLACK => pawns >> 8,
+            WHITE => pawns >> 8,
+            BLACK => pawns << 8,
         };
         one_forward = one_forward & board.get_empty();
         while one_forward != 0 {
@@ -103,13 +104,13 @@ impl Piece {
             let piece = piece::Piece::new(enums::PieceType::PAWN, color);
 
             let promotion_row: u8 = match color {
-                WHITE => 8,
-                BLACK => 1,
+                WHITE => 0,
+                BLACK => 7,
             };
 
             if to_square.get_row_index() == promotion_row {
                 // Handle promotions (excluding KING)
-                for piece_type in PieceType::iter().filter(|&p| p != PieceType::KING) {
+                for piece_type in PieceType::iter().filter(|&p| p != PieceType::KING && p != PAWN) {
                     let _move = moves::Move::new(
                         from_square,
                         to_square,
@@ -140,9 +141,14 @@ impl Piece {
         }
 
         // Two forward
+        let single_step = match color {
+            WHITE => (pawns >> 8) & board.get_empty(),
+            BLACK => (pawns << 8) & board.get_empty(),
+        };
+
         let mut two_forward = match color {
-            WHITE => pawns & board.rank_2 << 8 & board.get_empty() << 8 & board.get_empty(),
-            BLACK => pawns & board.rank_6 >> 8 & board.get_empty() >> 8 & board.get_empty(),
+            WHITE => (single_step >> 8) & board.get_empty(),
+            BLACK => (single_step << 8) & board.get_empty(),
         };
         while two_forward != 0 {
             // Isolate the MSB
@@ -165,9 +171,9 @@ impl Piece {
                 to_square,
                 piece,
                 None,  // No captured piece
-                None,  // No promotion
-                false, // is_promotion
-                true,  // is_castling
+                None,  // is promotion
+                false, // is_castle
+                true,  // is_en_passant
             );
             moves.push(_move);
 
@@ -200,20 +206,22 @@ impl Piece {
                 let captured = board.get_piece_at_square(to_square);
 
                 let promotion_row: u8 = match color {
-                    WHITE => 8,
-                    BLACK => 1,
+                    WHITE => 0,
+                    BLACK => 7,
                 };
 
                 if to_square.get_row_index() == promotion_row {
                     // Handle promotions (excluding KING)
-                    for piece_type in PieceType::iter().filter(|&p| p != PieceType::KING) {
+                    for piece_type in
+                        PieceType::iter().filter(|&p| p != PieceType::KING && p != PAWN)
+                    {
                         let _move = moves::Move::new(
                             from_square,
                             to_square,
                             piece,
                             captured,         // No captured piece
                             Some(piece_type), // Promotion piece
-                            true,             // is_promotion
+                            false,            // is_promotion
                             false,            // is_castling
                         );
                         moves.push(_move);
@@ -370,7 +378,7 @@ impl Piece {
     }
 
     fn get_sliding_moves(&self, board: &Board, directions: &[(i32, i32)]) -> Vec<Move> {
-        let mut moves: Vec<Move> = vec::Vec::new();
+        let mut moves: Vec<Move> = Vec::new();
         let color = self.color;
 
         let bitboard = board.get_piece_bitboard(self);
@@ -378,65 +386,131 @@ impl Piece {
 
         for number in numbers {
             let from_pos = Square::square_from_number(number);
-            for (dx, dy) in directions {
-                let mut to_pos = Square::square_from_number((number as i32 - dy * 8 + dx) as u8);
+            let start_rank = (number / 8) as i32;
+            let start_file = (number % 8) as i32;
 
-                while to_pos.is_valid() {
+            for &(dx, dy) in directions {
+                let mut current_rank = start_rank + dy;
+                let mut current_file = start_file + dx;
+
+                // Check boundaries explicitly to avoid board wrapping
+                while current_rank >= 0 && current_rank < 8 && current_file >= 0 && current_file < 8
+                {
+                    let target_index = (current_rank * 8 + current_file) as u8;
+                    let to_pos = Square::square_from_number(target_index);
                     let piece_at_target = board.get_piece_at_square(to_pos);
 
-                    if piece_at_target.is_none() {
-                        let _move = Move::new(
-                            from_pos,
-                            to_pos,
-                            board
-                                .get_piece_at_square(to_pos)
-                                .expect("F at getting piece at a square it was supposed to be one"),
-                            None,
-                            None,
-                            false,
-                            false,
-                        );
-                        moves.push(_move);
-
-                        let temp_number = to_pos.to_index() as i32;
-                        to_pos = Square::square_from_number((temp_number - dy * 8 + dx) as u8);
-
-                        continue;
+                    match piece_at_target {
+                        None => {
+                            // Empty square move (moving piece is self, target piece is None)
+                            let _move = Move::new(
+                                from_pos,
+                                to_pos,
+                                self.clone(), // Moving piece
+                                None,         // No captured piece on an empty square
+                                None,
+                                false,
+                                false,
+                            );
+                            moves.push(_move);
+                        }
+                        Some(captured_piece) => {
+                            if captured_piece.color == color.opposite() {
+                                // Enemy piece capture
+                                let _move = Move::new(
+                                    from_pos,
+                                    to_pos,
+                                    self.clone(),
+                                    Some(captured_piece),
+                                    None,
+                                    false,
+                                    false,
+                                );
+                                moves.push(_move);
+                            }
+                            // Blocked by any piece (friendly or enemy) -> stop sliding along this ray
+                            break;
+                        }
                     }
 
-                    if piece_at_target
-                        .expect("Previous if that contradicts none")
-                        .color
-                        == color.opposite()
-                    {
-                        let _move = Move::new(
-                            from_pos,
-                            to_pos,
-                            board
-                                .get_piece_at_square(to_pos)
-                                .expect("F at getting piece at a square it was supposed to be one"),
-                            piece_at_target,
-                            None,
-                            false,
-                            false,
-                        );
-                        moves.push(_move);
-
-                        break;
-                    }
-
-                    if piece_at_target
-                        .expect("Previous if that contradicts none")
-                        .color
-                        == color
-                    {
-                        break;
-                    }
+                    // Advance further along the ray direction
+                    current_rank += dy;
+                    current_file += dx;
                 }
             }
         }
+
         moves
     }
+
+    // fn get_sliding_moves(&self, board: &Board, directions: &[(i32, i32)]) -> Vec<Move> {
+    //     let mut moves: Vec<Move> = vec::Vec::new();
+    //     let color = self.color;
+    //
+    //     let bitboard = board.get_piece_bitboard(self);
+    //     let numbers = enums::get_positions_from_bitboard(&bitboard);
+    //
+    //     for number in numbers {
+    //         let from_pos = Square::square_from_number(number);
+    //         for (dx, dy) in directions {
+    //             let mut to_pos = Square::square_from_number((number as i32 - dy * 8 + dx) as u8);
+    //
+    //             while to_pos.is_valid() {
+    //                 let piece_at_target = board.get_piece_at_square(to_pos);
+    //
+    //                 if piece_at_target.is_none() {
+    //                     let _move = Move::new(
+    //                         from_pos,
+    //                         to_pos,
+    //                         board
+    //                             .get_piece_at_square(to_pos)
+    //                             .expect("F at getting piece at a square it was supposed to be one"),
+    //                         None,
+    //                         None,
+    //                         false,
+    //                         false,
+    //                     );
+    //                     moves.push(_move);
+    //
+    //                     let temp_number = to_pos.to_index() as i32;
+    //                     to_pos = Square::square_from_number((temp_number - dy * 8 + dx) as u8);
+    //
+    //                     continue;
+    //                 }
+    //
+    //                 if piece_at_target
+    //                     .expect("Previous if that contradicts none")
+    //                     .color
+    //                     == color.opposite()
+    //                 {
+    //                     let _move = Move::new(
+    //                         from_pos,
+    //                         to_pos,
+    //                         board
+    //                             .get_piece_at_square(to_pos)
+    //                             .expect("F at getting piece at a square it was supposed to be one"),
+    //                         piece_at_target,
+    //                         None,
+    //                         false,
+    //                         false,
+    //                     );
+    //                     moves.push(_move);
+    //
+    //                     break;
+    //                 }
+    //
+    //                 if piece_at_target
+    //                     .expect("Previous if that contradicts none")
+    //                     .color
+    //                     == color
+    //                 {
+    //                     break;
+    //                 }
+    //             }
+    //         }
+    //     }
+    //     moves
+    // }
 
     pub fn to_char(&self) -> char {
         let c = self.piece_type.to_char();
@@ -467,8 +541,8 @@ impl KnightMoves {
     /// Calculate all knight moves from a given square (0-63).
     const fn calculate_knight_moves(square: usize) -> u64 {
         let mut result = 0u64;
-        let row = square / 8;
-        let col = square % 8;
+        let row = (square / 8) as isize;
+        let col = (square % 8) as isize;
 
         // All 8 possible knight moves (L-shaped: 2 squares in one direction, 1 in the other)
         let knight_moves = [
@@ -515,8 +589,8 @@ impl PawnCaptureMoves {
 
     const fn calculate_pawn_capture_moves(square: usize, color: Color) -> u64 {
         let mut result = 0u64;
-        let row = square / 8;
-        let col = square % 8;
+        let row = (square / 8) as isize;
+        let col = (square % 8) as isize;
 
         let pawn_capture_moves = match color {
             WHITE => [(row - 1, col + 1), (row - 1, col - 1)],
@@ -556,8 +630,8 @@ impl KingMoves {
 
     const fn calculate_king_moves(square: usize) -> u64 {
         let mut result = 0u64;
-        let row = square / 8;
-        let col = square % 8;
+        let row = (square / 8) as isize;
+        let col = (square % 8) as isize;
 
         let king_moves = [
             (row + 1, col + 1),

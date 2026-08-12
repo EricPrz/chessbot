@@ -1,4 +1,5 @@
-use std::vec;
+use core::fmt;
+use std::{fmt::Display, vec};
 
 use crate::{
     enums::{
@@ -44,6 +45,12 @@ pub struct Board {
     pub file_f: u64,
     pub file_g: u64,
     pub file_h: u64,
+}
+
+impl Display for Board {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "FooWrite")
+    }
 }
 
 impl Board {
@@ -477,27 +484,55 @@ impl Board {
         fen
     }
 
+    // pub fn from_fen(fen: String) -> Board {
+    //     let mut board = Board::empty();
+    //
+    //     let mut ranks = fen.split("/");
+    //
+    //     for rank_index in 0..8 {
+    //         let mut empty = 0;
+    //         let rank = ranks.next().expect("Should be 8 parts of position fen");
+    //
+    //         for letter in rank.chars() {
+    //             if letter.is_numeric() {
+    //                 empty += letter.to_digit(10).unwrap();
+    //                 continue;
+    //             }
+    //
+    //             let piece = Piece::from_char(letter);
+    //
+    //             let square_index = rank_index * 8 + empty as u8;
+    //             let square = Square::square_from_number(square_index);
+    //
+    //             board.set_piece_at_square(square, piece);
+    //         }
+    //     }
+    //
+    //     board
+    // }
+
     pub fn from_fen(fen: String) -> Board {
         let mut board = Board::empty();
 
-        let mut ranks = fen.split("/");
+        // Only parse the position component of the FEN string
+        let position_part = fen.split_whitespace().next().unwrap_or(&fen);
+        let mut ranks = position_part.split('/');
 
         for rank_index in 0..8 {
-            let mut empty = 0;
             let rank = ranks.next().expect("Should be 8 parts of position fen");
+            let mut file_index = 0u8;
 
             for letter in rank.chars() {
-                if letter.is_numeric() {
-                    empty += letter.to_digit(10).unwrap();
-                    continue;
+                if let Some(digit) = letter.to_digit(10) {
+                    file_index += digit as u8;
+                } else {
+                    let piece = Piece::from_char(letter);
+                    let square_index = rank_index * 8 + file_index;
+                    let square = Square::square_from_number(square_index);
+
+                    board.set_piece_at_square(square, piece);
+                    file_index += 1; // Increment file for every placed piece!
                 }
-
-                let piece = Piece::from_char(letter);
-
-                let square_index = rank_index * 8 + empty as u8;
-                let square = Square::square_from_number(square_index);
-
-                board.set_piece_at_square(square, piece);
             }
         }
 

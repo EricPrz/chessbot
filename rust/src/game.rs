@@ -13,7 +13,7 @@ use crate::{
 };
 
 pub struct Game {
-    board: Board,
+    pub board: Board,
     turn: Color,
     castling: CastlingRights,
     half_move_clock: u8,
@@ -55,12 +55,12 @@ impl Game {
         game.castling = CastlingRights::from_string(castling_string.to_string());
 
         // to do
-        let en_passant = fen_string
-            .get(4)
-            .expect("FEN should have info about en passant");
-        if en_passant != &"-" {
-            let en_passant_square = Square::from_uci(en_passant);
-        }
+        // let en_passant = fen_string
+        //     .get(4)
+        //     .expect("FEN should have info about en passant");
+        // if en_passant != &"-" {
+        //     let en_passant_square = Square::from_uci(en_passant);
+        // }
 
         game.half_move_clock = fen_string
             .get(4)
@@ -98,6 +98,9 @@ impl Game {
         for piece_type in PieceType::iter() {
             let piece = Piece::new(piece_type, self.turn);
             let moves = piece.get_pseudo_legal_moves(&self.board);
+            for move_ in &moves {
+                println!("Move: {}", move_.to_uci());
+            }
             pseudo_legal_moves.extend(moves);
         }
 
