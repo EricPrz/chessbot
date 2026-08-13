@@ -76,6 +76,7 @@ impl Square {
         Square::square_from_number(number)
     }
     pub fn square_from_number(num: u8) -> Square {
+        // println!("Square from number: {}", num);
         match num {
             0 => Square::A8,
             1 => Square::B8,
@@ -141,7 +142,7 @@ impl Square {
             61 => Square::F1,
             62 => Square::G1,
             63 => Square::H1,
-            _ => panic!("Invalid Square."),
+            _ => panic!("Invalid Square. num: {}", num),
         }
     }
 
@@ -222,7 +223,6 @@ impl Square {
         let file = uci.chars().next().expect("UCI should have file");
         let rank = uci.chars().nth(1).expect("UCI should have rank");
 
-        // Prüfe, ob der File-Char (a-h) und der Rank-Char (1-8) gültig sind
         if !('a'..='h').contains(&file) || !('1'..='8').contains(&rank) {
             panic!("UCI is not valid")
         }
@@ -230,10 +230,12 @@ impl Square {
         // Konvertiere den File-Char in einen Index (0-7)
         let file_index = (file as u8 - b'a') as usize;
         // Konvertiere den Rank-Char in einen Index (0-7)
-        let rank_index = (rank as u8 - b'1') as usize;
+        let rank_index = (rank as u8 - b'0') as usize;
+
+        println!("From uci: {} {}, {} {}", file, rank, file_index, rank_index);
 
         // Berechne den Index des Squares (0 = A1, 1 = B1, ..., 63 = H8)
-        let index = rank_index * 8 + file_index;
+        let index = (8 - rank_index) * 8 + file_index;
 
         // Konvertiere den Index zurück in das Square-Enum
         Square::square_from_number(index as u8)
@@ -249,12 +251,12 @@ impl Square {
 
     pub fn get_row_index(&self) -> u8 {
         let rev_index = self.clone() as u8 / 8;
-        8 - rev_index
+        rev_index
     }
 
     pub fn get_col_index(&self) -> u8 {
         let rev_index = self.clone() as u8 % 8;
-        8 - rev_index
+        rev_index
     }
 
     pub fn is_valid(&self) -> bool {
@@ -293,6 +295,7 @@ pub fn get_squares_from_bitboard(_bitboard: &u64) -> Vec<Square> {
     let positions = get_positions_from_bitboard(_bitboard);
     let squares = positions
         .into_iter()
+        .filter(|position| (0..63).contains(position))
         .map(|position| Square::square_from_number(position))
         .collect();
 

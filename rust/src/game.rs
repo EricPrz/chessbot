@@ -1,7 +1,7 @@
 use std::vec;
 
 use crate::{
-    board::Board,
+    board::{self, Board},
     castling::CastlingRights,
     enums::{
         Color::{self, BLACK, WHITE},
@@ -55,12 +55,18 @@ impl Game {
         game.castling = CastlingRights::from_string(castling_string.to_string());
 
         // to do
-        // let en_passant = fen_string
-        //     .get(4)
-        //     .expect("FEN should have info about en passant");
-        // if en_passant != &"-" {
-        //     let en_passant_square = Square::from_uci(en_passant);
-        // }
+        let en_passant = fen_string
+            .get(3)
+            .expect("FEN should have info about en passant");
+        println!("En passant: {}", en_passant);
+        if en_passant != &"-" {
+            let en_passant_square = Square::from_uci(en_passant);
+            println!("En passant square: {}", en_passant_square.to_uci());
+            let en_passant_square_num = en_passant_square.to_index();
+            let mut en_passant_bitboard = game.board.get_mutable_en_passant();
+            *en_passant_bitboard = 1u64 << (en_passant_square_num);
+            println!("En passant_bitboard: {}", en_passant_bitboard);
+        }
 
         game.half_move_clock = fen_string
             .get(4)
@@ -96,6 +102,7 @@ impl Game {
         let mut pseudo_legal_moves = Vec::new();
 
         for piece_type in PieceType::iter() {
+            println!("Generating Moves for Piece: {}", piece_type.to_char());
             let piece = Piece::new(piece_type, self.turn);
             let moves = piece.get_pseudo_legal_moves(&self.board);
             for move_ in &moves {

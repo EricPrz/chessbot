@@ -248,27 +248,37 @@ impl Piece {
         }
 
         // En Passant
-        if board.get_en_passant_bitboard() != 0 {
-            // let en_passant_from = if color == WHITE {
-            //     en_passant_square >> 8
-            // } else {
-            //     en_passant_square << 8
-            // };
-            //
-            // // Check if the pawn is adjacent to the en_passant square
-            // let can_capture_en_passant = match color {
-            //     WHITE => (pawns & (en_passant_from << 1 | en_passant_from >> 1)) != 0,
-            //     BLACK => (pawns & (en_passant_from << 1 | en_passant_from >> 1)) != 0,
-            // };
-            //
-            // if can_capture_en_passant {
-            //     moves.push(moves::Move::new(
-            //         pos,
-            //         en_passant_square.trailing_zeros() as usize, // Convert bitboard to square index
-            //         moves::MoveType::EnPassant,
-            //     ));
-            // }
-            panic!("We should compute en passant captures.")
+        let en_passant_bitboard = board.get_en_passant_bitboard().clone();
+        if en_passant_bitboard != 0 {
+            let msb = en_passant_bitboard & en_passant_bitboard.wrapping_neg();
+            let to_square_num = 63 - msb.leading_zeros() as usize;
+            let to_pos = enums::Square::square_from_number(to_square_num as u8);
+
+            let from_pos_num: usize = match color {
+                WHITE => to_square_num + 8,
+                BLACK => to_square_num - 8,
+            };
+
+            let piece = piece::Piece::new(enums::PieceType::PAWN, color.clone());
+            let captured = Piece::new(PAWN, color.opposite());
+
+            if board.is_there_piece_at_square(
+                &piece,
+                Square::square_from_number(from_pos_num as u8 + 1),
+            ) {
+                let from_pos = Square::square_from_number(from_pos_num as u8 + 1);
+                let move_ = Move::new(from_pos, to_pos, piece, Some(captured), None, false, true);
+                moves.push(move_);
+            }
+
+            if board.is_there_piece_at_square(
+                &piece,
+                Square::square_from_number(from_pos_num as u8 - 1),
+            ) {
+                let from_pos = Square::square_from_number(from_pos_num as u8 - 1);
+                let move_ = Move::new(from_pos, to_pos, piece, Some(captured), None, false, true);
+                moves.push(move_);
+            }
         }
 
         moves

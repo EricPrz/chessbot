@@ -94,6 +94,16 @@ impl Board {
         Self::from_fen(String::from("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"))
     }
 
+    pub fn is_there_piece_at_square(&self, piece: &Piece, square: Square) -> bool {
+        // Iterate over all bitboards from get_all_piece_bitboards
+        let bitboard = self.get_piece_bitboard(piece);
+        // Check if the specified square is set in this bitboard
+        if (bitboard & (1u64 << square.to_index())) != 0 {
+            return true;
+        }
+        return false;
+    }
+
     pub fn get_piece_at_square(&self, square: Square) -> Option<Piece> {
         // Iterate over all bitboards from get_all_piece_bitboards
         for (piece_type_index, bitboard) in self.get_all_piece_bitboards().iter().enumerate() {
