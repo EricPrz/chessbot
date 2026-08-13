@@ -33,7 +33,6 @@ impl Game {
         }
     }
 
-    // to do
     pub fn from_fen(fen: String) -> Self {
         let mut game = Self::new();
 
@@ -54,18 +53,15 @@ impl Game {
             .expect("FEN should have castling rights info");
         game.castling = CastlingRights::from_string(castling_string.to_string());
 
-        // to do
         let en_passant = fen_string
             .get(3)
             .expect("FEN should have info about en passant");
-        println!("En passant: {}", en_passant);
         if en_passant != &"-" {
             let en_passant_square = Square::from_uci(en_passant);
             println!("En passant square: {}", en_passant_square.to_uci());
             let en_passant_square_num = en_passant_square.to_index();
             let mut en_passant_bitboard = game.board.get_mutable_en_passant();
             *en_passant_bitboard = 1u64 << (en_passant_square_num);
-            println!("En passant_bitboard: {}", en_passant_bitboard);
         }
 
         game.half_move_clock = fen_string
@@ -104,7 +100,7 @@ impl Game {
         for piece_type in PieceType::iter() {
             println!("Generating Moves for Piece: {}", piece_type.to_char());
             let piece = Piece::new(piece_type, self.turn);
-            let moves = piece.get_pseudo_legal_moves(&self.board);
+            let moves = piece.get_pseudo_legal_moves(&self.board, &self.castling);
             for move_ in &moves {
                 println!("Move: {}", move_.to_uci());
             }
@@ -162,7 +158,7 @@ impl Game {
         // Check if our king is in check after this move
         let king_pos = board_copy.find_king(self.turn);
 
-        return !board_copy.is_attacked(king_pos, self.turn.opposite());
+        return !board_copy.is_attacked(king_pos, self.turn.opposite(), &self.castling);
     }
 
     pub fn _apply_move(&mut self, move_: Move) {
@@ -285,7 +281,9 @@ impl Game {
     pub fn is_check(&self) -> bool {
         let king_pos = self.board.find_king(self.turn);
 
-        return self.board.is_attacked(king_pos, self.turn.opposite());
+        return self
+            .board
+            .is_attacked(king_pos, self.turn.opposite(), &self.castling);
     }
 
     pub fn is_checkmate(&self) -> bool {

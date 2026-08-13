@@ -14,7 +14,9 @@ fn main() {
     let game = Game::from_fen(String::from(
         // "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1",
         // "r1bqkbnr/ppp1pppp/n7/3pP3/8/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 3",
-        "r1bqkbnr/ppppp1pp/n7/5pP1/8/8/PPPPPP1P/RNBQKBNR w KQkq f6 0 3",
+        // "r1bqkbnr/ppppp1pp/n7/5pP1/8/8/PPPPPP1P/RNBQKBNR w KQkq f6 0 3",
+        // "rnbqk2r/ppppbppp/4pn2/8/8/4PN2/PPPPBPPP/RNBQK2R w KQkq - 2 4",
+        "rnbqk2r/ppppbppp/4pn2/8/8/4PN2/PPPPBPPP/RNBQ1RK1 b kq - 3 4",
     ));
     // let game = Game::new();
     println!("Board: {}", game.board);

@@ -1,4 +1,5 @@
 use crate::board::Board;
+use crate::castling::CastlingRights;
 use crate::enums::Color;
 use crate::enums::Color::BLACK;
 use crate::enums::Color::WHITE;
@@ -40,7 +41,11 @@ impl Piece {
         Piece::new(piece_type, color)
     }
 
-    pub fn get_pseudo_legal_moves(&self, board: &board::Board) -> vec::Vec<moves::Move> {
+    pub fn get_pseudo_legal_moves(
+        &self,
+        board: &board::Board,
+        castling_rights: &CastlingRights,
+    ) -> vec::Vec<moves::Move> {
         match self.piece_type {
             enums::PieceType::PAWN => self.get_pawn_moves(board),
             enums::PieceType::KNIGHT => self.get_knight_moves(board),
@@ -63,7 +68,7 @@ impl Piece {
                     (-1, -1),
                 ],
             ),
-            enums::PieceType::KING => self.get_king_moves(board),
+            enums::PieceType::KING => self.get_king_moves(board, castling_rights),
         }
     }
 
@@ -341,7 +346,7 @@ impl Piece {
         moves
     }
 
-    fn get_king_moves(&self, board: &board::Board) -> Vec<Move> {
+    fn get_king_moves(&self, board: &board::Board, castling_rights: &CastlingRights) -> Vec<Move> {
         let mut moves: Vec<Move> = Vec::new();
         let king_moves = KingMoves::new();
 
@@ -382,6 +387,73 @@ impl Piece {
             moves.push(_move);
 
             king_moves ^= msb;
+        }
+
+        // Castling
+        match color {
+            WHITE => {
+                if board.white_kingside_castling & board.get_empty()
+                    == board.white_kingside_castling
+                {
+                    println!("White kingside castling");
+                    let _move = moves::Move::new(
+                        from_square.clone(),
+                        Square::new(6, 7),
+                        piece.clone(),
+                        None,
+                        None,
+                        true,
+                        false,
+                    );
+                    moves.push(_move);
+                }
+
+                if board.white_queenside_castling & board.get_empty()
+                    == board.white_queenside_castling
+                {
+                    let _move = moves::Move::new(
+                        from_square.clone(),
+                        Square::new(2, 0),
+                        piece.clone(),
+                        None,
+                        None,
+                        true,
+                        false,
+                    );
+                    moves.push(_move);
+                }
+            }
+            BLACK => {
+                if board.black_kingside_castling & board.get_empty()
+                    == board.black_kingside_castling
+                {
+                    let _move = moves::Move::new(
+                        from_square.clone(),
+                        Square::new(6, 7),
+                        piece.clone(),
+                        None,
+                        None,
+                        true,
+                        false,
+                    );
+                    moves.push(_move);
+                }
+
+                if board.black_queenside_castling & board.get_empty()
+                    == board.black_queenside_castling
+                {
+                    let _move = moves::Move::new(
+                        from_square.clone(),
+                        Square::new(2, 7),
+                        piece.clone(),
+                        None,
+                        None,
+                        true,
+                        false,
+                    );
+                    moves.push(_move);
+                }
+            }
         }
 
         moves

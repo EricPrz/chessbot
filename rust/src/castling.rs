@@ -1,5 +1,6 @@
 use crate::enums::Color;
 
+#[derive(Debug)]
 pub struct CastlingRights {
     pub white_kingside: bool,
     pub black_kingside: bool,
@@ -53,10 +54,10 @@ impl CastlingRights {
 
     pub fn from_string(string: String) -> CastlingRights {
         CastlingRights {
-            white_kingside: string.find('W').is_some(),
-            black_kingside: string.find('B').is_some(),
-            white_queenside: string.find('w').is_some(),
-            black_queenside: string.find('b').is_some(),
+            white_kingside: string.find('K').is_some(),
+            black_kingside: string.find('k').is_some(),
+            white_queenside: string.find('Q').is_some(),
+            black_queenside: string.find('q').is_some(),
         }
     }
 }

@@ -2,6 +2,7 @@ use core::fmt;
 use std::{fmt::Display, vec};
 
 use crate::{
+    castling::CastlingRights,
     enums::{
         Color::{self, BLACK, WHITE},
         PieceType::{self, BISHOP, KING, KNIGHT, PAWN, QUEEN, ROOK},
@@ -27,6 +28,11 @@ pub struct Board {
     king_black: u64,
 
     en_passant: u64,
+
+    pub white_kingside_castling: u64,
+    pub white_queenside_castling: u64,
+    pub black_kingside_castling: u64,
+    pub black_queenside_castling: u64,
 
     pub rank_8: u64,
     pub rank_7: u64,
@@ -69,6 +75,15 @@ impl Board {
             king_white: 0,
             king_black: 0,
             en_passant: 0,
+
+            white_kingside_castling:
+                0b01100000_00000000_00000000_00000000_00000000_00000000_00000000_00000000,
+            white_queenside_castling:
+                0b00001110_00000000_00000000_00000000_00000000_00000000_00000000_00000000,
+            black_kingside_castling:
+                0b00000000_00000000_00000000_00000000_00000000_00000000_00000000_01100000,
+            black_queenside_castling:
+                0b00000000_00000000_00000000_00000000_00000000_00000000_00000000_01110000,
 
             rank_8: 0b11111111_00000000_00000000_00000000_00000000_00000000_00000000_00000000,
             rank_7: 0b00000000_11111111_00000000_00000000_00000000_00000000_00000000_00000000,
@@ -549,14 +564,19 @@ impl Board {
         board
     }
 
-    pub fn is_attacked(&self, square: Square, by_color: Color) -> bool {
+    pub fn is_attacked(
+        &self,
+        square: Square,
+        by_color: Color,
+        castling_rights: &CastlingRights,
+    ) -> bool {
         for piece_type in PieceType::iter() {
             if piece_type == KING {
                 continue;
             }
 
             let piece = Piece::new(piece_type, by_color);
-            let moves = piece.get_pseudo_legal_moves(self);
+            let moves = piece.get_pseudo_legal_moves(self, castling_rights);
 
             let attacking_moves: Vec<Move> = moves
                 .into_iter()
