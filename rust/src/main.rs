@@ -1,4 +1,10 @@
 use crate::game::Game;
+use crate::moves::Move;
+
+use clap::Parser;
+use regex::Regex;
+use std::fs::File;
+use std::io::{self, BufRead, BufReader, Read};
 
 mod board;
 mod castling;
@@ -8,27 +14,87 @@ mod moves;
 mod piece;
 mod position;
 
-fn main() {
-    println!("Hello, world!");
+#[derive(PartialEq, Clone)]
+enum Mode {
+    PGN = 0,
+    UCI = 1,
+    DEBUG = 2,
+}
 
-    let game = Game::from_fen(String::from(
-        // "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1",
-        // "r1bqkbnr/ppp1pppp/n7/3pP3/8/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 3",
-        // "r1bqkbnr/ppppp1pp/n7/5pP1/8/8/PPPPPP1P/RNBQKBNR w KQkq f6 0 3",
-        // "rnbqk2r/ppppbppp/4pn2/8/8/4PN2/PPPPBPPP/RNBQK2R w KQkq - 2 4",
-        "rnbqk2r/ppppbppp/4pn2/8/8/4PN2/PPPPBPPP/RNBQ1RK1 b kq - 3 4",
-    ));
-    // let game = Game::new();
-    println!("Board: {}", game.board);
-    let legal_moves = game.get_legal_moves();
-    println!("There are {} moves", legal_moves.len());
+#[derive(Parser)]
+struct Args {
+    mode: String,
+}
 
-    for move_ in legal_moves {
-        println!(
-            "{} {} {}",
-            move_.piece.to_char(),
-            move_.from_pos.to_uci(),
-            move_.to_pos.to_uci()
-        );
+fn main() -> io::Result<()> {
+    let cli = Args::parse();
+
+    if cli.mode == "PGN" {
+        println!("PGN");
+
+        let file = File::open("/run/media/eric/FAEF-F582/lichess_db_standard_rated_2026-06.pgn")?;
+        let reader = BufReader::new(file);
+
+        let re = Regex::new(r"(\{[^}]*\})|(\d*\.{1,3})").unwrap();
+
+        let mut line = String::new();
+        for line in reader.lines() {
+            let line = line?;
+            if line.starts_with("[") {
+                continue;
+            }
+
+            let mut game = Game::new();
+
+            let line_game = re.replace_all(&line, "");
+            for move_ in line_game.split(" ") {
+                if move_.is_empty() {
+                    continue;
+                } else {
+                    println!(
+                        "--------------------------------------------- UCI Move: {}",
+                        move_
+                    );
+                }
+
+                println!("Turn: {}", game.turn.to_char());
+
+                let all_mvs = game.get_legal_moves();
+                for mv in all_mvs {
+                    println!("Mv: {:?}", mv);
+                }
+
+                let mv = Move::from_uci(move_, &mut game);
+                if mv.is_some() {
+                    println!("Selected move: {:?}", mv);
+                    game._apply_move(mv.unwrap());
+                    println!("Turn after _apply_move: {}", game.turn.to_char());
+                } else {
+                    println!("Game: {}", line_game);
+                    panic!("Move not found");
+                }
+            }
+        }
     }
+
+    if cli.mode == "DEBUG" {
+        let game = Game::from_fen(String::from(
+            "rnbqk2r/ppppbppp/4pn2/8/8/4PN2/PPPPBPPP/RNBQ1RK1 b kq - 3 4",
+        ));
+        // let game = Game::new();
+        println!("Board: {}", game.board);
+        let legal_moves = game.get_legal_moves();
+        println!("There are {} moves", legal_moves.len());
+
+        for move_ in legal_moves {
+            println!(
+                "{} {} {}",
+                move_.piece.to_char(),
+                move_.from_pos.to_uci(),
+                move_.to_pos.to_uci()
+            );
+        }
+    }
+
+    Ok(())
 }

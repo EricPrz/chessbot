@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::enums::Color::{BLACK, WHITE};
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Square {
     A8 = 0,
     B8 = 1,
@@ -230,15 +230,24 @@ impl Square {
         // Konvertiere den File-Char in einen Index (0-7)
         let file_index = (file as u8 - b'a') as usize;
         // Konvertiere den Rank-Char in einen Index (0-7)
-        let rank_index = (rank as u8 - b'0') as usize;
-
-        println!("From uci: {} {}, {} {}", file, rank, file_index, rank_index);
+        let rank_index = (rank as u8 - b'1') as usize;
 
         // Berechne den Index des Squares (0 = A1, 1 = B1, ..., 63 = H8)
-        let index = (8 - rank_index) * 8 + file_index;
+        let index = (7 - rank_index) * 8 + file_index;
 
         // Konvertiere den Index zurück in das Square-Enum
-        Square::square_from_number(index as u8)
+        let sqr = Square::square_from_number(index as u8);
+
+        println!(
+            "From uci: {} {}, {} {}, {}",
+            file,
+            rank,
+            file_index,
+            rank_index,
+            sqr.to_uci()
+        );
+
+        sqr
     }
 
     pub fn square_to_number(square: Square) -> u8 {
@@ -302,7 +311,7 @@ pub fn get_squares_from_bitboard(_bitboard: &u64) -> Vec<Square> {
     squares
 }
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Clone, Copy, Debug)]
 pub enum Color {
     WHITE,
     BLACK,
@@ -334,7 +343,7 @@ impl Color {
     }
 }
 
-#[derive(Eq, PartialEq, Hash, Clone, Copy)]
+#[derive(Eq, PartialEq, Hash, Clone, Copy, Debug)]
 pub enum PieceType {
     PAWN = 1,
     KNIGHT = 2,

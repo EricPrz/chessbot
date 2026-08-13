@@ -16,7 +16,7 @@ use super::enums;
 
 use std::vec;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Piece {
     pub piece_type: enums::PieceType,
     pub color: enums::Color,
@@ -320,7 +320,7 @@ impl Piece {
 
             while knight_moves_from_square != 0 {
                 let msb2 = knight_moves_from_square & knight_moves_from_square.wrapping_neg();
-                let to_square_num = 63 - msb2.leading_zeros() as usize;
+                let to_square_num = msb2.leading_zeros() as usize;
                 let to_square = enums::Square::square_from_number(to_square_num as u8);
 
                 let captured = board.get_piece_at_square(to_square);
@@ -346,7 +346,11 @@ impl Piece {
         moves
     }
 
-    fn get_king_moves(&self, board: &board::Board, castling_rights: &CastlingRights) -> Vec<Move> {
+    pub fn get_king_moves(
+        &self,
+        board: &board::Board,
+        castling_rights: &CastlingRights,
+    ) -> Vec<Move> {
         let mut moves: Vec<Move> = Vec::new();
         let king_moves = KingMoves::new();
 
@@ -471,7 +475,11 @@ impl Piece {
             let start_rank = (number / 8) as i32;
             let start_file = (number % 8) as i32;
 
-            for &(dx, dy) in directions {
+            for dir in directions {
+                let dx = dir.0;
+                let dy = dir.1;
+                // println!("dir: {} {}", dir.0, dir.1);
+
                 let mut current_rank = start_rank + dy;
                 let mut current_file = start_file + dx;
 
@@ -481,6 +489,20 @@ impl Piece {
                     let target_index = (current_rank * 8 + current_file) as u8;
                     let to_pos = Square::square_from_number(target_index);
                     let piece_at_target = board.get_piece_at_square(to_pos);
+                    // println!("Start sqr: {} {}", start_file, start_rank);
+                    // println!("Current sqr: {} {}", current_file, current_rank);
+                    // println!(
+                    //     "To sqr: {} {}",
+                    //     to_pos.get_col_index(),
+                    //     to_pos.get_row_index()
+                    // );
+                    // if piece_at_target.clone().is_some() {
+                    //     println!("Piece at target: {}", piece_at_target.unwrap().to_char());
+                    // } else {
+                    //     println!("Piece at target: None");
+                    // }
+                    //
+                    // println!("\n");
 
                     match piece_at_target {
                         None => {
@@ -521,6 +543,11 @@ impl Piece {
                 }
             }
         }
+
+        // println!("Printing sliding moves...");
+        // for move_ in &moves {
+        //     println!("Sliding Move: {:?}", move_);
+        // }
 
         moves
     }

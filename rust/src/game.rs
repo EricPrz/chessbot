@@ -14,8 +14,8 @@ use crate::{
 
 pub struct Game {
     pub board: Board,
-    turn: Color,
-    castling: CastlingRights,
+    pub turn: Color,
+    pub castling: CastlingRights,
     half_move_clock: u8,
     fullmove_clock: u8,
     moves: vec::Vec<Move>,
@@ -98,7 +98,7 @@ impl Game {
         let mut pseudo_legal_moves = Vec::new();
 
         for piece_type in PieceType::iter() {
-            println!("Generating Moves for Piece: {}", piece_type.to_char());
+            // println!("Generating Moves for Piece: {}", piece_type.to_char());
             let piece = Piece::new(piece_type, self.turn);
             let moves = piece.get_pseudo_legal_moves(&self.board, &self.castling);
             for move_ in &moves {
@@ -110,7 +110,6 @@ impl Game {
         pseudo_legal_moves
     }
 
-    // to do
     fn _is_legal_move(&self, move_: &Move) -> bool {
         if !move_.from_pos.is_valid() || !move_.to_pos.is_valid() {
             return false;
@@ -270,7 +269,9 @@ impl Game {
         }
 
         // Switch turn
+        println!("OG turn: {}", self.turn.to_char());
         self.turn = self.turn.opposite();
+        println!("Changed turn: {}", self.turn.to_char());
 
         // Update fullmove number
         if self.turn == WHITE {
@@ -304,7 +305,9 @@ impl Game {
         self.half_move_clock >= 100 || self.is_stalemate()
     }
 
-    // pub fn get_fen(&self) -> String {}
+    pub fn get_fen(&self) -> String {
+        String::from("FEN")
+    }
 
     // pub fn get_pgn(&self) -> String {}
 

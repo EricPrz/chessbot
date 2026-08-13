@@ -121,9 +121,11 @@ impl Board {
 
     pub fn get_piece_at_square(&self, square: Square) -> Option<Piece> {
         // Iterate over all bitboards from get_all_piece_bitboards
+        // println!("Searching at square");
         for (piece_type_index, bitboard) in self.get_all_piece_bitboards().iter().enumerate() {
             // Check if the specified square is set in this bitboard
             if (bitboard & (1u64 << square.to_index())) != 0 {
+                // println!("Found at square");
                 // Determine the color of the piece based on its position in the vector
                 let color = if piece_type_index % 2 == 0 {
                     WHITE
@@ -145,6 +147,7 @@ impl Board {
                 return Some(Piece { color, piece_type });
             }
         }
+        // println!("Found none");
         None // No piece at this square
     }
 
