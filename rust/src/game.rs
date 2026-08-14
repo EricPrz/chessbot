@@ -161,6 +161,7 @@ impl Game {
     }
 
     pub fn _apply_move(&mut self, move_: Move) {
+        println!("Applying move: {:?}", move_);
         // Update halfmove clock
         if move_.get_piece().piece_type == PAWN || move_.captured.is_some() {
             self.half_move_clock = 0
@@ -233,6 +234,7 @@ impl Game {
 
             // Handle promotion
             if move_.promotion.is_some() {
+                self.board.remove_piece_at_square(move_.to_pos, move_.piece);
                 self.board.set_piece_at_square(
                     move_.to_pos,
                     Piece::new(move_.promotion.expect("Promotion is some"), self.turn),

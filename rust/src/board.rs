@@ -83,16 +83,16 @@ impl Board {
             black_kingside_castling:
                 0b00000000_00000000_00000000_00000000_00000000_00000000_00000000_01100000,
             black_queenside_castling:
-                0b00000000_00000000_00000000_00000000_00000000_00000000_00000000_01110000,
+                0b00000000_00000000_00000000_00000000_00000000_00000000_00000000_00001110,
 
-            rank_8: 0b11111111_00000000_00000000_00000000_00000000_00000000_00000000_00000000,
-            rank_7: 0b00000000_11111111_00000000_00000000_00000000_00000000_00000000_00000000,
-            rank_6: 0b00000000_00000000_11111111_00000000_00000000_00000000_00000000_00000000,
-            rank_5: 0b00000000_00000000_00000000_11111111_00000000_00000000_00000000_00000000,
-            rank_4: 0b00000000_00000000_00000000_00000000_11111111_00000000_00000000_00000000,
-            rank_3: 0b00000000_00000000_00000000_00000000_00000000_11111111_00000000_00000000,
-            rank_2: 0b00000000_00000000_00000000_00000000_00000000_00000000_11111111_00000000,
-            rank_1: 0b00000000_00000000_00000000_00000000_00000000_00000000_00000000_11111111,
+            rank_1: 0b11111111_00000000_00000000_00000000_00000000_00000000_00000000_00000000,
+            rank_2: 0b00000000_11111111_00000000_00000000_00000000_00000000_00000000_00000000,
+            rank_3: 0b00000000_00000000_11111111_00000000_00000000_00000000_00000000_00000000,
+            rank_4: 0b00000000_00000000_00000000_11111111_00000000_00000000_00000000_00000000,
+            rank_5: 0b00000000_00000000_00000000_00000000_11111111_00000000_00000000_00000000,
+            rank_6: 0b00000000_00000000_00000000_00000000_00000000_11111111_00000000_00000000,
+            rank_7: 0b00000000_00000000_00000000_00000000_00000000_00000000_11111111_00000000,
+            rank_8: 0b00000000_00000000_00000000_00000000_00000000_00000000_00000000_11111111,
 
             file_a: 0b01010101_01010101_01010101_01010101_01010101_01010101_01010101_01010101,
             file_b: 0b01010101_01010101_01010101_01010101_01010101_01010101_01010101_01010101 << 1,
@@ -121,8 +121,19 @@ impl Board {
 
     pub fn get_piece_at_square(&self, square: Square) -> Option<Piece> {
         // Iterate over all bitboards from get_all_piece_bitboards
-        // println!("Searching at square");
+        // println!("Searching at square: {}", square.to_uci());
         for (piece_type_index, bitboard) in self.get_all_piece_bitboards().iter().enumerate() {
+            let piece_type = match piece_type_index / 2 {
+                0 => PAWN,
+                1 => KNIGHT,
+                2 => BISHOP,
+                3 => ROOK,
+                4 => QUEEN,
+                5 => KING,
+                _ => unreachable!(), // Should never happen
+            };
+            // println!("Piece type searching: {}", piece_type.to_char());
+
             // Check if the specified square is set in this bitboard
             if (bitboard & (1u64 << square.to_index())) != 0 {
                 // println!("Found at square");
@@ -143,6 +154,7 @@ impl Board {
                     5 => KING,
                     _ => unreachable!(), // Should never happen
                 };
+                // println!("Piece type searching: {}", piece_type.to_char());
 
                 return Some(Piece { color, piece_type });
             }
@@ -204,6 +216,7 @@ impl Board {
             BLACK => self.get_black_king(),
         };
 
+        println!("King bitboard: {}", king_bitboard);
         get_squares_from_bitboard(&king_bitboard)
             .first()
             .copied()
@@ -219,19 +232,25 @@ impl Board {
     pub fn remove_piece_at_square(&mut self, square: Square, piece: Piece) {
         let bitboard = self.get_mutable_piece_bitboard(&piece);
         let index = square.to_index();
-        *bitboard |= 0 << index;
+        *bitboard &= !(1 << index);
     }
 
     pub fn move_piece(&mut self, from_pos: Square, to_pos: Square) {
         let from_piece = self.get_piece_at_square(from_pos);
+        let to_piece = self.get_piece_at_square(to_pos);
+        // println!("From piece: {}", from_piece.unwrap().to_char());
 
-        if from_piece.is_none() {
-            panic!("No piece was found at from square.")
+        if to_piece.is_some() {
+            self.remove_piece_at_square(to_pos, to_piece.clone().unwrap());
         }
 
-        self.remove_piece_at_square(from_pos, from_piece.clone().unwrap());
-
-        self.set_piece_at_square(to_pos, from_piece.unwrap());
+        if from_piece.is_none() {
+            println!("No piece was found at from square.");
+            // panic!("No piece was found at from square.")
+        } else {
+            self.remove_piece_at_square(from_pos, from_piece.clone().unwrap());
+            self.set_piece_at_square(to_pos, from_piece.unwrap());
+        }
     }
 
     pub fn get_piece_bitboard(&self, piece: &Piece) -> u64 {
@@ -356,6 +375,7 @@ impl Board {
             self.king_black,
         ]
     }
+
     pub fn get_whites(&self) -> u64 {
         self.pawns_white
             | self.knights_white
@@ -510,6 +530,26 @@ impl Board {
         }
 
         fen
+    }
+
+    pub fn print(&self) {
+        println!("Game Board:\n");
+        for rank in 0..8 {
+            let mut line = String::new();
+            for file in 0..8 {
+                let index = rank * 8 + file;
+                let piece = self.get_piece_at_board_index(index);
+
+                match piece {
+                    Some(p) => {
+                        line += &p.to_char().to_string();
+                    }
+                    None => line += "-",
+                }
+            }
+            line += "/";
+            println!("{}", line);
+        }
     }
 
     // pub fn from_fen(fen: String) -> Board {

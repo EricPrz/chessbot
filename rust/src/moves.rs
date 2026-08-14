@@ -71,12 +71,14 @@ impl Move {
         let color = game.turn;
 
         // 1. Castling Checks
-        let san_clean = san.replace(|c: char| ['+', '#', '!', '?', '*', ' '].contains(&c), "");
+        let mut san_clean = san.replace(|c: char| ['+', '#', '!', '?', '*', ' '].contains(&c), "");
         log::debug!("Clean SAN: {}", san_clean);
 
         let is_castling = matches!(san_clean.as_str(), "0-0" | "O-O" | "0-0-0" | "O-O-O");
         if is_castling {
             log::debug!("Castling!!");
+            println!("UCI Castling!!");
+            println!("Castling Rights: {:?}", game.castling);
             let king_square = game.board.find_king(color);
             let king = game
                 .board
@@ -90,10 +92,10 @@ impl Move {
             let king_side = san_clean.len() <= 3;
             for mv in moves {
                 if king_side && mv.to_pos.get_col_index() == 6 {
-                    game._apply_move(mv);
+                    // game._apply_move(mv);
                     return Some(mv);
                 } else if !king_side && mv.to_pos.get_col_index() == 2 {
-                    game._apply_move(mv);
+                    // game._apply_move(mv);
                     return Some(mv);
                 }
             }
@@ -127,6 +129,10 @@ impl Move {
                 let promoted_letter = promotion_part.chars().next()?;
                 promoted_piece = piece_map.get(&promoted_letter).cloned();
                 log::debug!("Promoted Piece: {:?}", promoted_piece);
+
+                let _eq_sign_idx = san_clean.find("=");
+                san_clean.remove(_eq_sign_idx.unwrap());
+                san_clean.remove(_eq_sign_idx.unwrap());
             }
         }
 
@@ -141,8 +147,11 @@ impl Move {
 
         if !Regex::new(r"^[a-h][1-8]$").unwrap().is_match(dest_str) {
             log::debug!("Failed to parse SAN (invalid destination): {}", san);
+            println!("Failed to parse SAN (invalid destination): {}", san);
             return None;
         }
+
+        println!("Promoted Piece: {:?}", &promoted_piece);
 
         let destination_position = Square::from_uci(dest_str);
         log::debug!("Destination Position: {:?}", destination_position);
@@ -172,6 +181,9 @@ impl Move {
         let mut dis_rank: Option<char> = None;
 
         let remainder_chars: Vec<char> = remainder.chars().collect();
+        for char in &remainder_chars {
+            println!("Remainder char: {}", char);
+        }
         match remainder_chars.len() {
             1 => {
                 let c = remainder_chars[0];
@@ -192,33 +204,53 @@ impl Move {
             _ => {}
         }
 
+        if dis_file.is_some() {
+            println!("Dis file: {}", dis_file.unwrap());
+        }
+        if dis_rank.is_some() {
+            println!("Dis rank: {}", dis_rank.unwrap());
+        }
+
         let req_file = dis_file.map(|c| c as u8 - b'a');
         let req_rank = dis_rank.map(|c| c as u8 - b'1');
+
+        if req_file.is_some() {
+            println!("Req file: {}", req_file.unwrap());
+        }
+        if req_rank.is_some() {
+            println!("Req rank: {}", req_rank.unwrap());
+        }
 
         let turn = game.turn;
         let piece = Piece::new(piece_type, turn);
         log::debug!("Piece: {:?}", piece);
 
-        // ---------------------------------------
         // 4. Fetch Legal Moves
         let all_moves_raw = game.get_legal_moves();
         let mut possible_moves = Vec::new();
 
+        println!("There are {} raw moves", all_moves_raw.len());
+
         for item in all_moves_raw {
-            // let mv = if let Some(mv_state) = item.as_any().downcast_ref::<MoveState>() {
-            //     mv_state.move_made
-            // } else {
-            //     item
-            // };
             let mv = item;
 
-            // if mv.is_none() {
-            //     continue;
-            // }
+            println!("Move Raw: {:?}", item);
+            println!("Col Idx: {:?}", mv.from_pos.get_col_index());
+            println!("Row Idx: {:?}", mv.from_pos.get_row_index());
 
-            // let mv = mv.unwrap();
             if mv.is_castle {
                 continue;
+            }
+
+            if let Some(target_promo) = promoted_piece {
+                if mv.promotion != Some(target_promo) {
+                    continue;
+                }
+            } else {
+                // If the user didn't specify a promotion, skip moves that require one
+                if mv.promotion.is_some() {
+                    continue;
+                }
             }
 
             if mv.to_pos != destination_position {
@@ -236,7 +268,7 @@ impl Move {
             }
 
             if let Some(req_rank) = req_rank {
-                if mv.from_pos.get_row_index() != req_rank {
+                if mv.from_pos.get_row_index() != 7 - req_rank {
                     continue;
                 }
             }
@@ -258,11 +290,14 @@ impl Move {
         let chosen_move = if possible_moves.len() == 1 {
             possible_moves[0]
         } else {
-            log::debug!(
+            println!(
                 "Unable to find origin position for move: {}\nFEN: {}",
                 san,
                 game.get_fen()
             );
+            for mv in possible_moves {
+                println!("Possible move: {:?}", mv);
+            }
             return None;
         };
 
@@ -281,7 +316,6 @@ impl Move {
 
         let captured_piece = game.board.get_piece_at_square(destination_position);
 
-        // 5. Apply the completed move
         let final_move = Move::new(
             chosen_move.from_pos,
             destination_position,

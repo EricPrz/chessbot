@@ -304,7 +304,7 @@ pub fn get_squares_from_bitboard(_bitboard: &u64) -> Vec<Square> {
     let positions = get_positions_from_bitboard(_bitboard);
     let squares = positions
         .into_iter()
-        .filter(|position| (0..63).contains(position))
+        .filter(|position| (0..64).contains(position))
         .map(|position| Square::square_from_number(position))
         .collect();
 

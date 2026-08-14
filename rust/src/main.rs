@@ -58,10 +58,14 @@ fn main() -> io::Result<()> {
                 }
 
                 println!("Turn: {}", game.turn.to_char());
+                let all_mvs = game._generate_pseudo_legal_moves();
+                for mv in all_mvs {
+                    println!("Pseudo Legal Mv: {:?}", mv);
+                }
 
                 let all_mvs = game.get_legal_moves();
                 for mv in all_mvs {
-                    println!("Mv: {:?}", mv);
+                    println!("Legal Mv: {:?}", mv);
                 }
 
                 let mv = Move::from_uci(move_, &mut game);
@@ -69,9 +73,15 @@ fn main() -> io::Result<()> {
                     println!("Selected move: {:?}", mv);
                     game._apply_move(mv.unwrap());
                     println!("Turn after _apply_move: {}", game.turn.to_char());
+                    println!("Internal FEN: {}", game.board.to_fen());
+                    game.board.print();
                 } else {
-                    println!("Game: {}", line_game);
-                    panic!("Move not found");
+                    if move_ == "1-0" || move_ == "0-1" || move_ == "1/2-1/2" {
+                        println!("Game finished: {}", move_);
+                    } else {
+                        println!("Game: {}", line_game);
+                        panic!("Move not found: {}", move_);
+                    }
                 }
             }
         }

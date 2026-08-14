@@ -122,7 +122,7 @@ impl Piece {
                         piece,
                         None,             // No captured piece
                         Some(piece_type), // Promotion piece
-                        true,             // is_promotion
+                        false,            // is_promotion
                         false,            // is_castling
                     );
                     moves.push(_move);
@@ -320,7 +320,7 @@ impl Piece {
 
             while knight_moves_from_square != 0 {
                 let msb2 = knight_moves_from_square & knight_moves_from_square.wrapping_neg();
-                let to_square_num = msb2.leading_zeros() as usize;
+                let to_square_num = 63 - msb2.leading_zeros() as usize;
                 let to_square = enums::Square::square_from_number(to_square_num as u8);
 
                 let captured = board.get_piece_at_square(to_square);
@@ -398,8 +398,8 @@ impl Piece {
             WHITE => {
                 if board.white_kingside_castling & board.get_empty()
                     == board.white_kingside_castling
+                    && board.find_king(WHITE) == Square::E1
                 {
-                    println!("White kingside castling");
                     let _move = moves::Move::new(
                         from_square.clone(),
                         Square::new(6, 7),
@@ -414,10 +414,11 @@ impl Piece {
 
                 if board.white_queenside_castling & board.get_empty()
                     == board.white_queenside_castling
+                    && board.find_king(WHITE) == Square::E1
                 {
                     let _move = moves::Move::new(
                         from_square.clone(),
-                        Square::new(2, 0),
+                        Square::new(2, 7),
                         piece.clone(),
                         None,
                         None,
@@ -428,12 +429,14 @@ impl Piece {
                 }
             }
             BLACK => {
+                println!("\nBlack Queenside Castling\n");
                 if board.black_kingside_castling & board.get_empty()
                     == board.black_kingside_castling
+                    && board.find_king(BLACK) == Square::E8
                 {
                     let _move = moves::Move::new(
                         from_square.clone(),
-                        Square::new(6, 7),
+                        Square::new(6, 0),
                         piece.clone(),
                         None,
                         None,
@@ -445,10 +448,12 @@ impl Piece {
 
                 if board.black_queenside_castling & board.get_empty()
                     == board.black_queenside_castling
+                    && board.find_king(BLACK) == Square::E8
                 {
+                    println!("\nBlack Queenside Castling In\n");
                     let _move = moves::Move::new(
                         from_square.clone(),
-                        Square::new(2, 7),
+                        Square::new(2, 0),
                         piece.clone(),
                         None,
                         None,
