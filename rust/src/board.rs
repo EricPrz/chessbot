@@ -526,7 +526,12 @@ impl Board {
                     None => empty += 1,
                 }
             }
-            fen += "/"
+            if empty > 0 {
+                fen += &empty.to_string();
+            }
+            if rank < 7 {
+                fen += "/";
+            }
         }
 
         fen

@@ -6,4 +6,5 @@ edition = "2024"
 [dependencies]
 clap = { version = "4.6.6", features = ["derive"] }
 log = "0.4.33"
+nnue-rs = "0.4.0"
 regex = "1.13.1"

@@ -14,6 +14,8 @@ mod moves;
 mod piece;
 mod position;
 
+use nnue_rs::Network;
+
 #[derive(PartialEq, Clone)]
 enum Mode {
     PGN = 0,
@@ -27,7 +29,22 @@ struct Args {
 }
 
 fn main() -> io::Result<()> {
+    // fn main() -> io::Result<()> {
     let cli = Args::parse();
+
+    if cli.mode == "NNUE" {
+        let net = Network::from_file("/home/eric/Projects/chessbot/rust/src/nn-37f18f62d772.nnue")
+            .expect("ay");
+        let start = "r1bq1rk1/Npp2ppp/3p4/2b5/2K1P3/4P3/PPPP2PP/RNBQ1B1R b - - 0 9";
+        let mut game = Game::from_fen(start.to_string());
+        // let move_ = Move::from_uci("e4", &mut game);
+        // game._apply_move(move_.unwrap());
+
+        let fen = game.get_fen();
+        println!("{}", fen);
+        let score = net.evaluate_fen(start).expect("ay");
+        println!("score: {score}");
+    }
 
     if cli.mode == "PGN" {
         println!("PGN");
@@ -45,6 +62,7 @@ fn main() -> io::Result<()> {
             }
 
             let mut game = Game::new();
+            game.get_fen();
 
             let line_game = re.replace_all(&line, "");
             for move_ in line_game.split(" ") {

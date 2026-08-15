@@ -6,7 +6,7 @@ use crate::{
     enums::{
         Color::{self, BLACK, WHITE},
         PieceType::{self, KING, PAWN, ROOK},
-        Square, get_bitboard_from_square,
+        Square, get_bitboard_from_square, get_squares_from_bitboard,
     },
     moves::Move,
     piece::Piece,
@@ -308,7 +308,38 @@ impl Game {
     }
 
     pub fn get_fen(&self) -> String {
-        String::from("FEN")
+        let mut parts: Vec<String> = Vec::new();
+
+        // Board part
+        parts.push(self.board.to_fen());
+
+        // turn
+        parts.push(self.turn.to_char().to_string());
+
+        // castling rights
+        parts.push(self.castling.to_string());
+
+        // en passant
+        let en_passant_bit = self.board.get_en_passant_bitboard();
+        let square = get_squares_from_bitboard(&en_passant_bit);
+        if square.len() == 1 {
+            parts.push(
+                square
+                    .get(0)
+                    .expect("Should be one en passant sqr")
+                    .to_uci(),
+            );
+        } else {
+            parts.push("-".to_string());
+        }
+
+        // half move
+        parts.push(self.half_move_clock.to_string());
+
+        // full move
+        parts.push(self.fullmove_clock.to_string());
+
+        parts.join(" ")
     }
 
     // pub fn get_pgn(&self) -> String {}
