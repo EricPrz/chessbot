@@ -1,6 +1,6 @@
-use crate::enums::Color;
+use crate::enums::Colorr;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CastlingRights {
     pub white_kingside: bool,
     pub black_kingside: bool,
@@ -18,8 +18,8 @@ impl CastlingRights {
         }
     }
 
-    pub fn get_for_color(&self, color: &Color) -> (bool, bool) {
-        if color == &Color::WHITE {
+    pub fn get_for_color(&self, color: &Colorr) -> (bool, bool) {
+        if color == &Colorr::WHITE {
             return (self.white_kingside, self.white_queenside);
         } else {
             return (self.black_kingside, self.black_queenside);

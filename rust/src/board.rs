@@ -4,16 +4,16 @@ use std::{fmt::Display, vec};
 use crate::{
     castling::CastlingRights,
     enums::{
-        Color::{self, BLACK, WHITE},
+        Colorr::{self, BLACK, WHITE},
         PieceType::{self, BISHOP, KING, KNIGHT, PAWN, QUEEN, ROOK},
         Square, get_squares_from_bitboard,
     },
     moves::Move,
-    piece::Piece,
+    piece::Piecee,
 };
 
 #[derive(Debug, Clone, Copy)]
-pub struct Board {
+pub struct Boardd {
     pawns_white: u64,
     pawns_black: u64,
     knights_white: u64,
@@ -53,13 +53,13 @@ pub struct Board {
     pub file_h: u64,
 }
 
-impl Display for Board {
+impl Display for Boardd {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "FooWrite")
     }
 }
 
-impl Board {
+impl Boardd {
     pub fn empty() -> Self {
         Self {
             pawns_white: 0,
@@ -109,7 +109,7 @@ impl Board {
         Self::from_fen(String::from("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"))
     }
 
-    pub fn is_there_piece_at_square(&self, piece: &Piece, square: Square) -> bool {
+    pub fn is_there_piece_at_square(&self, piece: &Piecee, square: Square) -> bool {
         // Iterate over all bitboards from get_all_piece_bitboards
         let bitboard = self.get_piece_bitboard(piece);
         // Check if the specified square is set in this bitboard
@@ -119,7 +119,7 @@ impl Board {
         return false;
     }
 
-    pub fn get_piece_at_square(&self, square: Square) -> Option<Piece> {
+    pub fn get_piece_at_square(&self, square: Square) -> Option<Piecee> {
         // Iterate over all bitboards from get_all_piece_bitboards
         // println!("Searching at square: {}", square.to_uci());
         for (piece_type_index, bitboard) in self.get_all_piece_bitboards().iter().enumerate() {
@@ -156,14 +156,14 @@ impl Board {
                 };
                 // println!("Piece type searching: {}", piece_type.to_char());
 
-                return Some(Piece { color, piece_type });
+                return Some(Piecee { color, piece_type });
             }
         }
         // println!("Found none");
         None // No piece at this square
     }
 
-    pub fn get_piece_at_board_index(&self, index: u8) -> Option<Piece> {
+    pub fn get_piece_at_board_index(&self, index: u8) -> Option<Piecee> {
         // Iterate over all bitboards from get_all_piece_bitboards
         for (piece_type_index, bitboard) in self.get_all_piece_bitboards().iter().enumerate() {
             // Check if the specified square is set in this bitboard
@@ -186,7 +186,7 @@ impl Board {
                     _ => unreachable!(), // Should never happen
                 };
 
-                return Some(Piece { color, piece_type });
+                return Some(Piecee { color, piece_type });
             }
         }
         None // No piece at this square
@@ -198,7 +198,7 @@ impl Board {
         return piece.is_none();
     }
 
-    pub fn is_occupied_by_color(&self, square: Square, color: Color) -> bool {
+    pub fn is_occupied_by_color(&self, square: Square, color: Colorr) -> bool {
         let piece = self.get_piece_at_square(square);
 
         if piece.is_none() {
@@ -210,7 +210,7 @@ impl Board {
         return square_piece_color == color;
     }
 
-    pub fn find_king(&self, color: Color) -> Square {
+    pub fn find_king(&self, color: Colorr) -> Square {
         let king_bitboard = match color {
             WHITE => self.get_white_king(),
             BLACK => self.get_black_king(),
@@ -223,13 +223,13 @@ impl Board {
             .expect("Exactly one king per side")
     }
 
-    pub fn set_piece_at_square(&mut self, square: Square, piece: Piece) {
+    pub fn set_piece_at_square(&mut self, square: Square, piece: Piecee) {
         let bitboard = self.get_mutable_piece_bitboard(&piece);
         let index = square.to_index();
         *bitboard |= 1 << index;
     }
 
-    pub fn remove_piece_at_square(&mut self, square: Square, piece: Piece) {
+    pub fn remove_piece_at_square(&mut self, square: Square, piece: Piecee) {
         let bitboard = self.get_mutable_piece_bitboard(&piece);
         let index = square.to_index();
         *bitboard &= !(1 << index);
@@ -253,106 +253,106 @@ impl Board {
         }
     }
 
-    pub fn get_piece_bitboard(&self, piece: &Piece) -> u64 {
+    pub fn get_piece_bitboard(&self, piece: &Piecee) -> u64 {
         match piece {
-            Piece {
+            Piecee {
                 piece_type: PAWN,
                 color: WHITE,
             } => self.get_white_pawns(),
-            Piece {
+            Piecee {
                 piece_type: PAWN,
                 color: BLACK,
             } => self.get_black_pawns(),
-            Piece {
+            Piecee {
                 piece_type: BISHOP,
                 color: WHITE,
             } => self.get_white_bishops(),
-            Piece {
+            Piecee {
                 piece_type: BISHOP,
                 color: BLACK,
             } => self.get_black_bishops(),
-            Piece {
+            Piecee {
                 piece_type: KNIGHT,
                 color: WHITE,
             } => self.get_white_knights(),
-            Piece {
+            Piecee {
                 piece_type: KNIGHT,
                 color: BLACK,
             } => self.get_black_knights(),
-            Piece {
+            Piecee {
                 piece_type: ROOK,
                 color: WHITE,
             } => self.get_white_rooks(),
-            Piece {
+            Piecee {
                 piece_type: ROOK,
                 color: BLACK,
             } => self.get_black_rooks(),
-            Piece {
+            Piecee {
                 piece_type: QUEEN,
                 color: WHITE,
             } => self.get_white_queens(),
-            Piece {
+            Piecee {
                 piece_type: QUEEN,
                 color: BLACK,
             } => self.get_black_queens(),
-            Piece {
+            Piecee {
                 piece_type: KING,
                 color: WHITE,
             } => self.get_white_king(),
-            Piece {
+            Piecee {
                 piece_type: KING,
                 color: BLACK,
             } => self.get_black_king(),
         }
     }
 
-    pub fn get_mutable_piece_bitboard(&mut self, piece: &Piece) -> &mut u64 {
+    pub fn get_mutable_piece_bitboard(&mut self, piece: &Piecee) -> &mut u64 {
         match piece {
-            Piece {
+            Piecee {
                 piece_type: PAWN,
                 color: WHITE,
             } => self.get_mutable_white_pawns(),
-            Piece {
+            Piecee {
                 piece_type: PAWN,
                 color: BLACK,
             } => self.get_mutable_black_pawns(),
-            Piece {
+            Piecee {
                 piece_type: BISHOP,
                 color: WHITE,
             } => self.get_mutable_white_bishops(),
-            Piece {
+            Piecee {
                 piece_type: BISHOP,
                 color: BLACK,
             } => self.get_mutable_black_bishops(),
-            Piece {
+            Piecee {
                 piece_type: KNIGHT,
                 color: WHITE,
             } => self.get_mutable_white_knights(),
-            Piece {
+            Piecee {
                 piece_type: KNIGHT,
                 color: BLACK,
             } => self.get_mutable_black_knights(),
-            Piece {
+            Piecee {
                 piece_type: ROOK,
                 color: WHITE,
             } => self.get_mutable_white_rooks(),
-            Piece {
+            Piecee {
                 piece_type: ROOK,
                 color: BLACK,
             } => self.get_mutable_black_rooks(),
-            Piece {
+            Piecee {
                 piece_type: QUEEN,
                 color: WHITE,
             } => self.get_mutable_white_queens(),
-            Piece {
+            Piecee {
                 piece_type: QUEEN,
                 color: BLACK,
             } => self.get_mutable_black_queens(),
-            Piece {
+            Piecee {
                 piece_type: KING,
                 color: WHITE,
             } => self.get_mutable_white_king(),
-            Piece {
+            Piecee {
                 piece_type: KING,
                 color: BLACK,
             } => self.get_mutable_black_king(),
@@ -572,7 +572,7 @@ impl Board {
     //                 continue;
     //             }
     //
-    //             let piece = Piece::from_char(letter);
+    //             let piece = Piecee::from_char(letter);
     //
     //             let square_index = rank_index * 8 + empty as u8;
     //             let square = Square::square_from_number(square_index);
@@ -584,8 +584,8 @@ impl Board {
     //     board
     // }
 
-    pub fn from_fen(fen: String) -> Board {
-        let mut board = Board::empty();
+    pub fn from_fen(fen: String) -> Boardd {
+        let mut board = Boardd::empty();
 
         // Only parse the position component of the FEN string
         let position_part = fen.split_whitespace().next().unwrap_or(&fen);
@@ -599,7 +599,7 @@ impl Board {
                 if let Some(digit) = letter.to_digit(10) {
                     file_index += digit as u8;
                 } else {
-                    let piece = Piece::from_char(letter);
+                    let piece = Piecee::from_char(letter);
                     let square_index = rank_index * 8 + file_index;
                     let square = Square::square_from_number(square_index);
 
@@ -615,7 +615,7 @@ impl Board {
     pub fn is_attacked(
         &self,
         square: Square,
-        by_color: Color,
+        by_color: Colorr,
         castling_rights: &CastlingRights,
     ) -> bool {
         for piece_type in PieceType::iter() {
@@ -623,7 +623,7 @@ impl Board {
                 continue;
             }
 
-            let piece = Piece::new(piece_type, by_color);
+            let piece = Piecee::new(piece_type, by_color);
             let moves = piece.get_pseudo_legal_moves(self, castling_rights);
 
             let attacking_moves: Vec<Move> = moves

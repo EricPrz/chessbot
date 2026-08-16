@@ -1,20 +1,22 @@
+use nnue_rs::{Board, Color, FenBoard, Network, Piece};
 use std::vec;
 
 use crate::{
-    board::{self, Board},
+    board::{self, Boardd},
     castling::CastlingRights,
     enums::{
-        Color::{self, BLACK, WHITE},
+        Colorr::{self, BLACK, WHITE},
         PieceType::{self, KING, PAWN, ROOK},
         Square, get_bitboard_from_square, get_squares_from_bitboard,
     },
     moves::Move,
-    piece::Piece,
+    piece::Piecee,
 };
 
+#[derive(Debug, Clone)]
 pub struct Game {
-    pub board: Board,
-    pub turn: Color,
+    pub board: Boardd,
+    pub turn: Colorr,
     pub castling: CastlingRights,
     half_move_clock: u8,
     fullmove_clock: u8,
@@ -24,7 +26,7 @@ pub struct Game {
 impl Game {
     pub fn new() -> Self {
         Self {
-            board: Board::new(),
+            board: Boardd::new(),
             turn: WHITE,
             castling: CastlingRights::new(),
             half_move_clock: 0,
@@ -38,7 +40,7 @@ impl Game {
 
         let fen_string: Vec<&str> = fen.split(" ").collect();
 
-        game.board = Board::from_fen(
+        game.board = Boardd::from_fen(
             fen_string
                 .get(0)
                 .expect("FEN should have board info")
@@ -46,7 +48,7 @@ impl Game {
         );
 
         let color_char = fen_string.get(1).expect("FEN should have turn info");
-        game.turn = Color::from_char(color_char);
+        game.turn = Colorr::from_char(color_char);
 
         let castling_string = fen_string
             .get(2)
@@ -99,7 +101,7 @@ impl Game {
 
         for piece_type in PieceType::iter() {
             // println!("Generating Moves for Piece: {}", piece_type.to_char());
-            let piece = Piece::new(piece_type, self.turn);
+            let piece = Piecee::new(piece_type, self.turn);
             let moves = piece.get_pseudo_legal_moves(&self.board, &self.castling);
             for move_ in &moves {
                 println!("Move: {}", move_.to_uci());
@@ -149,7 +151,7 @@ impl Game {
             if move_.is_en_passant {
                 let captured_pos =
                     Square::new(move_.to_pos.get_col_index(), move_.from_pos.get_row_index());
-                board_copy.remove_piece_at_square(captured_pos, Piece::new(PAWN, self.turn));
+                board_copy.remove_piece_at_square(captured_pos, Piecee::new(PAWN, self.turn));
                 // board_copy.set_piece(captured_pos, None)
             }
         }
@@ -158,6 +160,19 @@ impl Game {
         let king_pos = board_copy.find_king(self.turn);
 
         return !board_copy.is_attacked(king_pos, self.turn.opposite(), &self.castling);
+    }
+
+    pub fn get_children(&self) -> Vec<Game> {
+        let moves = self.get_legal_moves();
+        let mut children: Vec<Game> = Vec::new();
+
+        for move_ in moves {
+            let mut child = self.clone();
+            child._apply_move(move_);
+            children.push(child);
+        }
+
+        children
     }
 
     pub fn _apply_move(&mut self, move_: Move) {
@@ -225,7 +240,7 @@ impl Game {
                 // self.board.set_piece(captured_pos, None);
                 self.board.remove_piece_at_square(
                     captured_pos,
-                    Piece::new(PAWN, move_.piece.color.opposite()),
+                    Piecee::new(PAWN, move_.piece.color.opposite()),
                 );
             }
 
@@ -237,9 +252,9 @@ impl Game {
                 self.board.remove_piece_at_square(move_.to_pos, move_.piece);
                 self.board.set_piece_at_square(
                     move_.to_pos,
-                    Piece::new(move_.promotion.expect("Promotion is some"), self.turn),
+                    Piecee::new(move_.promotion.expect("Promotion is some"), self.turn),
                 );
-                // self.board.set_piece(move.to_pos, Piece(move.promotion, self.turn))
+                // self.board.set_piece(move.to_pos, Piecee(move.promotion, self.turn))
             }
 
             // Update castling rights
@@ -345,4 +360,45 @@ impl Game {
     // pub fn get_pgn(&self) -> String {}
 
     // pub fn get_nnue_encoding(&self) {}
+}
+
+impl Board for Game {
+    fn side_to_move(&self) -> Color {
+        // whose turn it is
+        if self.turn == Colorr::WHITE {
+            Color::White
+        } else {
+            Color::Black
+        }
+    }
+
+    fn king_square(&self, color: Color) -> u8 {
+        // square (0-63) of `color`'s king
+        let colorr = match color {
+            Color::White => Colorr::WHITE,
+            Color::Black => Colorr::BLACK,
+        };
+        63 - self.board.find_king(colorr).to_index()
+    }
+
+    fn for_each_piece(&self, f: &mut dyn FnMut(u8, Piece)) {
+        // call `f(square, piece)` for every piece on the board
+        for piece_type in PieceType::iter() {
+            let white_piece = Piecee::new(piece_type, Colorr::WHITE);
+            let white_bitboard = self.board.get_piece_bitboard(&white_piece);
+
+            let white = get_squares_from_bitboard(&white_bitboard);
+            for sqr in white {
+                f(63 - sqr.to_index(), white_piece.to_nnue_piece())
+            }
+
+            let black_piece = Piecee::new(piece_type, Colorr::BLACK);
+            let black_bitboard = self.board.get_piece_bitboard(&black_piece);
+
+            let black = get_squares_from_bitboard(&black_bitboard);
+            for sqr in black {
+                f(63 - sqr.to_index(), black_piece.to_nnue_piece())
+            }
+        }
+    }
 }

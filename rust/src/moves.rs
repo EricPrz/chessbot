@@ -1,11 +1,8 @@
-use crate::board::Board;
-use crate::enums::Color::BLACK;
-use crate::enums::Color::WHITE;
 use crate::enums::PieceType;
 use crate::enums::PieceType::PAWN;
 use crate::enums::Square;
 use crate::game::Game;
-use crate::piece::Piece;
+use crate::piece::Piecee;
 
 use log::{info, warn};
 use regex::Regex;
@@ -18,8 +15,8 @@ use super::piece;
 pub struct Move {
     pub from_pos: enums::Square,
     pub to_pos: enums::Square,
-    pub piece: piece::Piece,
-    pub captured: Option<piece::Piece>,
+    pub piece: piece::Piecee,
+    pub captured: Option<piece::Piecee>,
     pub promotion: Option<enums::PieceType>,
     pub is_castle: bool,
     pub is_en_passant: bool,
@@ -29,8 +26,8 @@ impl Move {
     pub fn new(
         from_pos: enums::Square,
         to_pos: enums::Square,
-        piece: piece::Piece,
-        captured: Option<piece::Piece>,
+        piece: piece::Piecee,
+        captured: Option<piece::Piecee>,
         promotion: Option<enums::PieceType>,
         is_castle: bool,
         is_en_passant: bool,
@@ -50,7 +47,7 @@ impl Move {
         self.to_pos
     }
 
-    pub fn get_piece(&self) -> Piece {
+    pub fn get_piece(&self) -> Piecee {
         self.piece
     }
 
@@ -222,7 +219,7 @@ impl Move {
         }
 
         let turn = game.turn;
-        let piece = Piece::new(piece_type, turn);
+        let piece = Piecee::new(piece_type, turn);
         log::debug!("Piece: {:?}", piece);
 
         // 4. Fetch Legal Moves

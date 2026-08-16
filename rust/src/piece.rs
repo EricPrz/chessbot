@@ -1,10 +1,15 @@
-use crate::board::Board;
+use crate::board::Boardd;
 use crate::castling::CastlingRights;
-use crate::enums::Color;
-use crate::enums::Color::BLACK;
-use crate::enums::Color::WHITE;
+use crate::enums::Colorr;
+use crate::enums::Colorr::BLACK;
+use crate::enums::Colorr::WHITE;
 use crate::enums::PieceType;
+use crate::enums::PieceType::BISHOP;
+use crate::enums::PieceType::KING;
+use crate::enums::PieceType::KNIGHT;
 use crate::enums::PieceType::PAWN;
+use crate::enums::PieceType::QUEEN;
+use crate::enums::PieceType::ROOK;
 use crate::enums::Square;
 use crate::enums::get_squares_from_bitboard;
 use crate::moves;
@@ -14,36 +19,39 @@ use crate::piece;
 use super::board;
 use super::enums;
 
+use nnue_rs::Color;
+use nnue_rs::{Piece, PieceKind};
+
 use std::vec;
 
 #[derive(Clone, Copy, Debug)]
-pub struct Piece {
+pub struct Piecee {
     pub piece_type: enums::PieceType,
-    pub color: enums::Color,
+    pub color: enums::Colorr,
 }
 
-impl Piece {
-    pub fn new(piece_type: enums::PieceType, color: enums::Color) -> Piece {
-        Piece {
+impl Piecee {
+    pub fn new(piece_type: enums::PieceType, color: enums::Colorr) -> Piecee {
+        Piecee {
             piece_type: piece_type,
             color: color,
         }
     }
 
-    pub fn from_char(c: char) -> Piece {
+    pub fn from_char(c: char) -> Piecee {
         let color = if c.is_ascii_uppercase() {
-            enums::Color::WHITE
+            enums::Colorr::WHITE
         } else {
-            enums::Color::BLACK
+            enums::Colorr::BLACK
         };
 
         let piece_type = PieceType::from_char(c.to_ascii_lowercase());
-        Piece::new(piece_type, color)
+        Piecee::new(piece_type, color)
     }
 
     pub fn get_pseudo_legal_moves(
         &self,
-        board: &board::Board,
+        board: &board::Boardd,
         castling_rights: &CastlingRights,
     ) -> vec::Vec<moves::Move> {
         match self.piece_type {
@@ -72,7 +80,7 @@ impl Piece {
         }
     }
 
-    pub fn get_pawn_moves(&self, board: &board::Board) -> Vec<moves::Move> {
+    pub fn get_pawn_moves(&self, board: &board::Boardd) -> Vec<moves::Move> {
         let color = self.color;
 
         let pawns = match color {
@@ -106,7 +114,7 @@ impl Piece {
             let to_square = enums::Square::square_from_number(to_square_num);
             let from_square = enums::Square::square_from_number(from_square_num);
 
-            let piece = piece::Piece::new(enums::PieceType::PAWN, color);
+            let piece = piece::Piecee::new(enums::PieceType::PAWN, color);
 
             let promotion_row: u8 = match color {
                 WHITE => 0,
@@ -169,7 +177,7 @@ impl Piece {
             let to_square = enums::Square::square_from_number(to_square_num);
             let from_square = enums::Square::square_from_number(from_square_num);
 
-            let piece = piece::Piece::new(enums::PieceType::PAWN, color);
+            let piece = piece::Piecee::new(enums::PieceType::PAWN, color);
 
             let _move = moves::Move::new(
                 from_square,
@@ -201,7 +209,7 @@ impl Piece {
             let mut pawn_captures_from_square =
                 pawn_capture_moves.moves[from_square_num] & enemy_pieces;
 
-            let piece = piece::Piece::new(enums::PieceType::PAWN, color.clone());
+            let piece = piece::Piecee::new(enums::PieceType::PAWN, color.clone());
 
             while pawn_captures_from_square != 0 {
                 let msb2 = pawn_captures_from_square & pawn_captures_from_square.wrapping_neg();
@@ -264,8 +272,8 @@ impl Piece {
                 BLACK => to_square_num - 8,
             };
 
-            let piece = piece::Piece::new(enums::PieceType::PAWN, color.clone());
-            let captured = Piece::new(PAWN, color.opposite());
+            let piece = piece::Piecee::new(enums::PieceType::PAWN, color.clone());
+            let captured = Piecee::new(PAWN, color.opposite());
 
             if board.is_there_piece_at_square(
                 &piece,
@@ -289,19 +297,19 @@ impl Piece {
         moves
     }
 
-    fn get_knight_moves(&self, board: &board::Board) -> Vec<moves::Move> {
+    fn get_knight_moves(&self, board: &board::Boardd) -> Vec<moves::Move> {
         let knight_moves = KnightMoves::new();
 
         let mut moves: Vec<moves::Move> = vec::Vec::new();
 
         let color = &self.color;
         let enemy_bitboard = match color {
-            enums::Color::WHITE => board.get_blacks(),
-            enums::Color::BLACK => board.get_whites(),
+            enums::Colorr::WHITE => board.get_blacks(),
+            enums::Colorr::BLACK => board.get_whites(),
         };
         let mut knights = match color {
-            enums::Color::WHITE => board.get_white_knights(),
-            enums::Color::BLACK => board.get_black_knights(),
+            enums::Colorr::WHITE => board.get_white_knights(),
+            enums::Colorr::BLACK => board.get_black_knights(),
         };
 
         while knights != 0 {
@@ -316,7 +324,7 @@ impl Piece {
             let mut knight_moves_from_square =
                 knight_moves.moves[from_square_num] & (enemy_bitboard | board.get_empty());
 
-            let piece = piece::Piece::new(enums::PieceType::KNIGHT, color.clone());
+            let piece = piece::Piecee::new(enums::PieceType::KNIGHT, color.clone());
 
             while knight_moves_from_square != 0 {
                 let msb2 = knight_moves_from_square & knight_moves_from_square.wrapping_neg();
@@ -348,7 +356,7 @@ impl Piece {
 
     pub fn get_king_moves(
         &self,
-        board: &board::Board,
+        board: &board::Boardd,
         castling_rights: &CastlingRights,
     ) -> Vec<Move> {
         let mut moves: Vec<Move> = Vec::new();
@@ -356,12 +364,12 @@ impl Piece {
 
         let color = &self.color;
         let enemy_bitboard = match color {
-            enums::Color::WHITE => board.get_blacks(),
-            enums::Color::BLACK => board.get_whites(),
+            enums::Colorr::WHITE => board.get_blacks(),
+            enums::Colorr::BLACK => board.get_whites(),
         };
         let king = match color {
-            enums::Color::WHITE => board.get_white_king(),
-            enums::Color::BLACK => board.get_black_king(),
+            enums::Colorr::WHITE => board.get_white_king(),
+            enums::Colorr::BLACK => board.get_black_king(),
         };
 
         let squares = get_squares_from_bitboard(&king);
@@ -370,7 +378,7 @@ impl Piece {
         let king_moves_bit = king_moves.moves[from_square.to_index() as usize];
         let mut king_moves = king_moves_bit & (enemy_bitboard | board.get_empty());
 
-        let piece = piece::Piece::new(enums::PieceType::KING, color.clone());
+        let piece = piece::Piecee::new(enums::PieceType::KING, color.clone());
 
         while king_moves != 0 {
             let msb = king_moves & king_moves.wrapping_neg();
@@ -468,7 +476,7 @@ impl Piece {
         moves
     }
 
-    fn get_sliding_moves(&self, board: &Board, directions: &[(i32, i32)]) -> Vec<Move> {
+    fn get_sliding_moves(&self, board: &Boardd, directions: &[(i32, i32)]) -> Vec<Move> {
         let mut moves: Vec<Move> = Vec::new();
         let color = self.color;
 
@@ -557,7 +565,7 @@ impl Piece {
         moves
     }
 
-    // fn get_sliding_moves(&self, board: &Board, directions: &[(i32, i32)]) -> Vec<Move> {
+    // fn get_sliding_moves(&self, board: &Boardd, directions: &[(i32, i32)]) -> Vec<Move> {
     //     let mut moves: Vec<Move> = vec::Vec::new();
     //     let color = self.color;
     //
@@ -633,6 +641,24 @@ impl Piece {
             BLACK => c.to_ascii_lowercase(),
         }
     }
+
+    pub fn to_nnue_piece(&self) -> Piece {
+        let color = match self.color {
+            WHITE => Color::White,
+            BLACK => Color::Black,
+        };
+
+        let piece_type = match self.piece_type {
+            PAWN => PieceKind::Pawn,
+            BISHOP => PieceKind::Bishop,
+            KNIGHT => PieceKind::Knight,
+            ROOK => PieceKind::Rook,
+            QUEEN => PieceKind::Queen,
+            KING => PieceKind::King,
+        };
+
+        Piece::new(color, piece_type)
+    }
 }
 
 pub struct KnightMoves {
@@ -689,7 +715,7 @@ pub struct PawnCaptureMoves {
 }
 
 impl PawnCaptureMoves {
-    pub const fn new(color: Color) -> Self {
+    pub const fn new(color: Colorr) -> Self {
         let mut moves = [0u64; 64];
         let mut square = 0;
 
@@ -701,7 +727,7 @@ impl PawnCaptureMoves {
         Self { moves }
     }
 
-    const fn calculate_pawn_capture_moves(square: usize, color: Color) -> u64 {
+    const fn calculate_pawn_capture_moves(square: usize, color: Colorr) -> u64 {
         let mut result = 0u64;
         let row = (square / 8) as isize;
         let col = (square % 8) as isize;

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::enums::Color::{BLACK, WHITE};
+use crate::enums::Colorr::{BLACK, WHITE};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Square {
@@ -312,29 +312,29 @@ pub fn get_squares_from_bitboard(_bitboard: &u64) -> Vec<Square> {
 }
 
 #[derive(PartialEq, Clone, Copy, Debug)]
-pub enum Color {
+pub enum Colorr {
     WHITE,
     BLACK,
 }
 
-impl Color {
-    pub fn opposite(&self) -> Color {
-        if self == &Color::WHITE {
-            return Color::BLACK;
+impl Colorr {
+    pub fn opposite(&self) -> Colorr {
+        if self == &Colorr::WHITE {
+            return Colorr::BLACK;
         }
 
-        if self == &Color::BLACK {
-            return Color::WHITE;
+        if self == &Colorr::BLACK {
+            return Colorr::WHITE;
         }
 
         panic!("No Color matched.")
     }
 
     pub fn to_char(&self) -> char {
-        if self == &Color::WHITE { 'w' } else { 'b' }
+        if self == &Colorr::WHITE { 'w' } else { 'b' }
     }
 
-    pub fn from_char(char: &str) -> Color {
+    pub fn from_char(char: &str) -> Colorr {
         match char {
             "w" => WHITE,
             "b" => BLACK,

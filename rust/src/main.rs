@@ -12,9 +12,8 @@ mod enums;
 mod game;
 mod moves;
 mod piece;
-mod position;
 
-use nnue_rs::Network;
+use nnue_rs::{Board, Network};
 
 #[derive(PartialEq, Clone)]
 enum Mode {
@@ -31,6 +30,31 @@ struct Args {
 fn main() -> io::Result<()> {
     // fn main() -> io::Result<()> {
     let cli = Args::parse();
+
+    if cli.mode == "SEARCH" {
+        let start = "r1bq1rk1/Npp2ppp/3p4/2b5/2K1P3/4P3/PPPP2PP/RNBQ1B1R b - - 0 9";
+        let mut game = Game::from_fen(start.to_string());
+
+        let net = Network::from_file("/home/eric/Projects/chessbot/rust/src/nn-37f18f62d772.nnue")
+            .expect("ay");
+
+        let root_acc = net.accumulator(&game);
+        let score = net.evaluate_accumulator(&root_acc, game.side_to_move());
+        println!("Acc Score: {}", score);
+
+        // let net = Network::from_file("net.nnue")?;
+        //
+        // // Compute the accumulator once for the root position.
+        // let root_acc = net.accumulator(&parent);
+        //
+        // // For each child, advance into a fresh accumulator slot.
+        // let mut child_acc = net.empty_accumulator();
+        // net.update(&parent, &child, &root_acc, &mut child_acc);
+        //
+        // // Evaluate. Side to move is passed separately so the same accumulator can be
+        // // reused across a null move.
+        // let score = net.evaluate_accumulator(&child_acc, child.side_to_move());
+    }
 
     if cli.mode == "NNUE" {
         let net = Network::from_file("/home/eric/Projects/chessbot/rust/src/nn-37f18f62d772.nnue")
