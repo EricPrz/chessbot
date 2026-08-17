@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use clap::builder::Str;
+
 use crate::enums::Colorr::{BLACK, WHITE};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -434,4 +436,26 @@ impl Iterator for PieceTypeIterator {
             _ => None,
         }
     }
+}
+
+pub fn print_bitboard(bitboard: u64) {
+    println!("  +-------------------+");
+    for rank in (0..8) {
+        print!("{} |", rank + 1);
+        for file in 0..8 {
+            // Calculate the square index (0 to 63)
+            let square = rank * 8 + file;
+            // Check if the bit is set at this square
+            let bit = (bitboard >> square) & 1;
+
+            if bit == 1 {
+                print!(" 1");
+            } else {
+                print!(" .");
+            }
+        }
+        println!(" |");
+    }
+    println!("  +-------------------+");
+    println!("    a b c d e f g h");
 }

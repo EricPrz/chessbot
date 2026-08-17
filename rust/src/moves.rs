@@ -63,7 +63,151 @@ impl Move {
         return uci;
     }
 
-    pub fn from_uci(san: &str, game: &mut Game) -> Option<Move> {
+    pub fn from_uci(uci: &str, game: &mut Game) -> Option<Move> {
+        log::debug!("FEN: {}", game.get_fen());
+
+        // UCI format is exactly 4 characters for normal moves, or 5 for promotions
+        // Examples: "e2e4", "e7e8q" (promotion to queen)
+        if uci.len() < 4 || uci.len() > 5 {
+            log::debug!("Invalid UCI length: {}", uci);
+            return None;
+        }
+
+        // Validate the format: source (2 chars) + target (2 chars) + optional promotion (1 char)
+        let source_str = &uci[0..2];
+        let target_str = &uci[2..4];
+        let promotion_char = if uci.len() == 5 {
+            Some(uci.chars().nth(4)?)
+        } else {
+            None
+        };
+
+        // Validate source and target squares are valid UCI format
+        if !Regex::new(r"^[a-h][1-8]$").unwrap().is_match(source_str) {
+            log::debug!("Invalid source square: {}", source_str);
+            return None;
+        }
+        if !Regex::new(r"^[a-h][1-8]$").unwrap().is_match(target_str) {
+            log::debug!("Invalid target square: {}", target_str);
+            return None;
+        }
+
+        let source_position = Square::from_uci(source_str);
+        let target_position = Square::from_uci(target_str);
+
+        // Parse promotion if present
+        let mut promoted_piece: Option<PieceType> = None;
+        if let Some(promo_char) = promotion_char {
+            let piece_map: std::collections::HashMap<char, PieceType> = [
+                ('q', PieceType::QUEEN),
+                ('r', PieceType::ROOK),
+                ('b', PieceType::BISHOP),
+                ('n', PieceType::KNIGHT),
+            ]
+            .iter()
+            .cloned()
+            .collect();
+
+            promoted_piece = piece_map.get(&promo_char.to_ascii_lowercase()).cloned();
+            if promoted_piece.is_none() {
+                log::debug!("Invalid promotion piece: {}", promo_char);
+                return None;
+            }
+            log::debug!("Promoted Piece: {:?}", promoted_piece);
+        }
+
+        let turn = game.turn;
+
+        // Get the piece at the source square
+        let source_piece = game.board.get_piece_at_square(source_position);
+        if source_piece.is_none() {
+            log::debug!("No piece at source square: {}", source_str);
+            return None;
+        }
+        let piece = source_piece.unwrap();
+
+        // Verify it's the correct color's turn
+        if piece.color != turn {
+            log::debug!("Wrong color piece at source: {:?}", piece);
+            return None;
+        }
+
+        // Check if this is a castling move
+        let is_castling = if piece.piece_type == PieceType::KING {
+            // King moving two squares is castling
+            let col_diff = (source_position.get_col_index() as i32
+                - target_position.get_col_index() as i32)
+                .abs();
+            if col_diff == 2 { true } else { false }
+        } else {
+            false
+        };
+
+        // Check if this is an en passant capture
+        let mut is_en_passant = false;
+        if piece.piece_type == PieceType::PAWN {
+            // Pawn moving diagonally to an empty square = en passant
+            if source_position.get_col_index() != target_position.get_col_index() {
+                if game.board.get_piece_at_square(target_position).is_none() {
+                    is_en_passant = true;
+                }
+            }
+        }
+
+        // Get captured piece (if any)
+        let captured_piece = game.board.get_piece_at_square(target_position);
+
+        // Find the legal move that matches these parameters
+        let all_moves = game.get_legal_moves();
+        let mut possible_moves = Vec::new();
+
+        for mv in all_moves {
+            // Skip castling moves if we're not looking for one (they'll be handled separately)
+            if mv.is_castle != is_castling {
+                continue;
+            }
+
+            // Check source and target squares match
+            if mv.from_pos != source_position || mv.to_pos != target_position {
+                continue;
+            }
+
+            // Check promotion matches
+            if mv.promotion != promoted_piece {
+                continue;
+            }
+
+            // Check piece type and color match
+            if mv.piece.piece_type != piece.piece_type || mv.piece.color != turn {
+                continue;
+            }
+
+            possible_moves.push(mv);
+        }
+
+        // Return the matching move or None
+        if possible_moves.len() == 1 {
+            Some(possible_moves[0])
+        } else if possible_moves.is_empty() {
+            log::debug!(
+                "No legal move found for UCI: {}\nFEN: {}",
+                uci,
+                game.get_fen()
+            );
+            None
+        } else {
+            log::debug!(
+                "Multiple moves found for UCI: {}\nFEN: {}",
+                uci,
+                game.get_fen()
+            );
+            // You could add disambiguation logic here if needed
+            // But UCI should normally be unambiguous
+            None
+        }
+    }
+
+    pub fn from_san(san: &str, game: &mut Game) -> Option<Move> {
         log::debug!("FEN: {}", game.get_fen());
         let color = game.turn;
 

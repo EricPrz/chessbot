@@ -216,7 +216,7 @@ impl Boardd {
             BLACK => self.get_black_king(),
         };
 
-        println!("King bitboard: {}", king_bitboard);
+        // println!("King bitboard: {}", king_bitboard);
         get_squares_from_bitboard(&king_bitboard)
             .first()
             .copied()

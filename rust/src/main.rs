@@ -1,5 +1,9 @@
 use crate::game::Game;
 use crate::moves::Move;
+use crate::search::{SearchNode, TranspositionTable};
+use std::time;
+
+use log2::*;
 
 use clap::Parser;
 use regex::Regex;
@@ -12,141 +16,120 @@ mod enums;
 mod game;
 mod moves;
 mod piece;
+mod search;
 
 use nnue_rs::{Board, Network};
 
-#[derive(PartialEq, Clone)]
-enum Mode {
-    PGN = 0,
-    UCI = 1,
-    DEBUG = 2,
+// Pseudocode for the 'uci' command response
+fn handle_uci() {
+    println!("id name MyEngine");
+    println!("id author YourName");
+    // Optional: announce options
+    // println!("option name Hash type spin default 64 min 1 max 1024");
+    println!("uciok");
+    log::info!("uci");
 }
 
-#[derive(Parser)]
-struct Args {
-    mode: String,
+fn handle_setoption(args: &Vec<&str>) {
+    log::info!("setoption");
+
+    for arg in args {
+        log::info!("Arg: {}", arg);
+    }
 }
 
-fn main() -> io::Result<()> {
-    // fn main() -> io::Result<()> {
-    let cli = Args::parse();
+fn handle_position(args: &Vec<&str>, game: &mut Game) {
+    log::info!("position");
 
-    if cli.mode == "SEARCH" {
-        let start = "r1bq1rk1/Npp2ppp/3p4/2b5/2K1P3/4P3/PPPP2PP/RNBQ1B1R b - - 0 9";
-        let mut game = Game::from_fen(start.to_string());
-
-        let net = Network::from_file("/home/eric/Projects/chessbot/rust/src/nn-37f18f62d772.nnue")
-            .expect("ay");
-
-        let root_acc = net.accumulator(&game);
-        let score = net.evaluate_accumulator(&root_acc, game.side_to_move());
-        println!("Acc Score: {}", score);
-
-        // let net = Network::from_file("net.nnue")?;
-        //
-        // // Compute the accumulator once for the root position.
-        // let root_acc = net.accumulator(&parent);
-        //
-        // // For each child, advance into a fresh accumulator slot.
-        // let mut child_acc = net.empty_accumulator();
-        // net.update(&parent, &child, &root_acc, &mut child_acc);
-        //
-        // // Evaluate. Side to move is passed separately so the same accumulator can be
-        // // reused across a null move.
-        // let score = net.evaluate_accumulator(&child_acc, child.side_to_move());
+    for arg in args {
+        log::info!("Arg: {}", arg);
     }
 
-    if cli.mode == "NNUE" {
-        let net = Network::from_file("/home/eric/Projects/chessbot/rust/src/nn-37f18f62d772.nnue")
-            .expect("ay");
-        let start = "r1bq1rk1/Npp2ppp/3p4/2b5/2K1P3/4P3/PPPP2PP/RNBQ1B1R b - - 0 9";
-        let mut game = Game::from_fen(start.to_string());
-        // let move_ = Move::from_uci("e4", &mut game);
-        // game._apply_move(move_.unwrap());
+    if args[1] == "fen" {
+        let fen = args.get(2..8).unwrap().join(" ");
+        log::info!("FEN parsed: {}", fen);
 
-        let fen = game.get_fen();
-        println!("{}", fen);
-        let score = net.evaluate_fen(start).expect("ay");
-        println!("score: {score}");
-    }
+        *game = Game::from_fen(fen);
 
-    if cli.mode == "PGN" {
-        println!("PGN");
+        if args[8] == "moves" {
+            // let num_moves = args.len() - 9;
+            for move_uci in args[9..].iter() {
+                log::info!("UCI Move: {}", move_uci);
 
-        let file = File::open("/run/media/eric/FAEF-F582/lichess_db_standard_rated_2026-06.pgn")?;
-        let reader = BufReader::new(file);
+                let move_ = Move::from_uci(move_uci, &mut *game);
 
-        let re = Regex::new(r"(\{[^}]*\})|(\d*\.{1,3})").unwrap();
-
-        let mut line = String::new();
-        for line in reader.lines() {
-            let line = line?;
-            if line.starts_with("[") {
-                continue;
-            }
-
-            let mut game = Game::new();
-            game.get_fen();
-
-            let line_game = re.replace_all(&line, "");
-            for move_ in line_game.split(" ") {
-                if move_.is_empty() {
-                    continue;
-                } else {
-                    println!(
-                        "--------------------------------------------- UCI Move: {}",
-                        move_
-                    );
-                }
-
-                println!("Turn: {}", game.turn.to_char());
-                let all_mvs = game._generate_pseudo_legal_moves();
-                for mv in all_mvs {
-                    println!("Pseudo Legal Mv: {:?}", mv);
-                }
-
-                let all_mvs = game.get_legal_moves();
-                for mv in all_mvs {
-                    println!("Legal Mv: {:?}", mv);
-                }
-
-                let mv = Move::from_uci(move_, &mut game);
-                if mv.is_some() {
-                    println!("Selected move: {:?}", mv);
-                    game._apply_move(mv.unwrap());
-                    println!("Turn after _apply_move: {}", game.turn.to_char());
-                    println!("Internal FEN: {}", game.board.to_fen());
-                    game.board.print();
-                } else {
-                    if move_ == "1-0" || move_ == "0-1" || move_ == "1/2-1/2" {
-                        println!("Game finished: {}", move_);
-                    } else {
-                        println!("Game: {}", line_game);
-                        panic!("Move not found: {}", move_);
+                match move_ {
+                    Some(m) => {
+                        game._apply_move(m);
+                        log::info!("Applied move {}", m.to_uci());
+                    }
+                    None => {
+                        log::info!("Move wasnt found for {}", move_uci);
+                        panic!("Move wasnt found");
                     }
                 }
             }
         }
     }
 
-    if cli.mode == "DEBUG" {
-        let game = Game::from_fen(String::from(
-            "rnbqk2r/ppppbppp/4pn2/8/8/4PN2/PPPPBPPP/RNBQ1RK1 b kq - 3 4",
-        ));
-        // let game = Game::new();
-        println!("Board: {}", game.board);
-        let legal_moves = game.get_legal_moves();
-        println!("There are {} moves", legal_moves.len());
+    log::info!("Applied FEN: {}", game.get_fen());
+}
 
-        for move_ in legal_moves {
-            println!(
-                "{} {} {}",
-                move_.piece.to_char(),
-                move_.from_pos.to_uci(),
-                move_.to_pos.to_uci()
-            );
-        }
+fn handle_go(args: &Vec<&str>, game: &Game, net: &Network, table: &mut TranspositionTable) {
+    log::info!("go");
+
+    for arg in args {
+        log::info!("Arg: {}", arg);
     }
 
-    Ok(())
+    let mut search_node = SearchNode::new_root(game, net, table);
+    let final_move = search_node.iterative_deepening(6, net, table);
+
+    match final_move {
+        Some(m) => {
+            log::info!("Found Move: {:?}", m);
+            println!("bestmove {}", m.to_uci());
+        }
+        None => panic!("F"),
+    }
+}
+
+fn handle_ucinewgame() {
+    log::info!("ucinewgame");
+}
+
+fn handle_ponderhit() {
+    log::info!("ponderhit");
+}
+
+fn handle_stop() {
+    log::info!("stop");
+}
+
+fn main() {
+    // Initialize essentials
+    let _log2 = log2::open("logs/my_engine.txt").start();
+    let net =
+        Network::from_file("/home/eric/Projects/chessbot/rust/src/nn-47fc8b7fff06.nnue").unwrap();
+    let mut table = TranspositionTable::new();
+    let mut game = Game::new();
+
+    loop {
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input).unwrap();
+        let args: Vec<&str> = input.split_whitespace().collect();
+
+        match args[0] {
+            "uci" => handle_uci(),
+            "isready" => println!("readyok"), // Engine is ready
+            "setoption" => handle_setoption(&args),
+            "ucinewgame" => handle_ucinewgame(),
+            "position" => handle_position(&args, &mut game),
+            "ponderhit" => handle_ponderhit(),
+            "go" => handle_go(&args, &game, &net, &mut table), // Calls your alpha-beta search!
+            "stop" => handle_stop(),
+            "quit" => break,
+            _ => {} // Ignore unknown commands
+        }
+    }
 }

@@ -20,7 +20,7 @@ pub struct Game {
     pub castling: CastlingRights,
     half_move_clock: u8,
     fullmove_clock: u8,
-    moves: vec::Vec<Move>,
+    pub moves: vec::Vec<Move>,
 }
 
 impl Game {
@@ -33,6 +33,17 @@ impl Game {
             fullmove_clock: 1,
             moves: Vec::new(),
         }
+    }
+
+    pub fn last_move(&self) -> Option<Move> {
+        self.moves.last().copied()
+    }
+
+    pub fn is_last_move_capture(&self) -> bool {
+        if let Some(move_) = self.moves.last() {
+            return move_.captured.is_some();
+        }
+        false
     }
 
     pub fn from_fen(fen: String) -> Self {
@@ -60,7 +71,7 @@ impl Game {
             .expect("FEN should have info about en passant");
         if en_passant != &"-" {
             let en_passant_square = Square::from_uci(en_passant);
-            println!("En passant square: {}", en_passant_square.to_uci());
+            // println!("En passant square: {}", en_passant_square.to_uci());
             let en_passant_square_num = en_passant_square.to_index();
             let mut en_passant_bitboard = game.board.get_mutable_en_passant();
             *en_passant_bitboard = 1u64 << (en_passant_square_num);
@@ -103,9 +114,9 @@ impl Game {
             // println!("Generating Moves for Piece: {}", piece_type.to_char());
             let piece = Piecee::new(piece_type, self.turn);
             let moves = piece.get_pseudo_legal_moves(&self.board, &self.castling);
-            for move_ in &moves {
-                println!("Move: {}", move_.to_uci());
-            }
+            // for move_ in &moves {
+            // println!("Move: {}", move_.to_uci());
+            // }
             pseudo_legal_moves.extend(moves);
         }
 
@@ -176,7 +187,7 @@ impl Game {
     }
 
     pub fn _apply_move(&mut self, move_: Move) {
-        println!("Applying move: {:?}", move_);
+        // println!("Applying move: {:?}", move_);
         // Update halfmove clock
         if move_.get_piece().piece_type == PAWN || move_.captured.is_some() {
             self.half_move_clock = 0
@@ -286,14 +297,16 @@ impl Game {
         }
 
         // Switch turn
-        println!("OG turn: {}", self.turn.to_char());
+        // println!("OG turn: {}", self.turn.to_char());
         self.turn = self.turn.opposite();
-        println!("Changed turn: {}", self.turn.to_char());
+        // println!("Changed turn: {}", self.turn.to_char());
 
         // Update fullmove number
         if self.turn == WHITE {
             self.fullmove_clock += 1
         }
+
+        self.moves.push(move_);
     }
 
     pub fn is_check(&self) -> bool {
@@ -378,6 +391,7 @@ impl Board for Game {
             Color::White => Colorr::WHITE,
             Color::Black => Colorr::BLACK,
         };
+        // println!("Idx: {}", self.board.find_king(colorr).to_index());
         63 - self.board.find_king(colorr).to_index()
     }
 
@@ -389,6 +403,7 @@ impl Board for Game {
 
             let white = get_squares_from_bitboard(&white_bitboard);
             for sqr in white {
+                // println!("Idx: {}", sqr.to_index());
                 f(63 - sqr.to_index(), white_piece.to_nnue_piece())
             }
 
@@ -397,6 +412,7 @@ impl Board for Game {
 
             let black = get_squares_from_bitboard(&black_bitboard);
             for sqr in black {
+                // println!("Idx: {}", sqr.to_index());
                 f(63 - sqr.to_index(), black_piece.to_nnue_piece())
             }
         }

@@ -437,7 +437,6 @@ impl Piecee {
                 }
             }
             BLACK => {
-                println!("\nBlack Queenside Castling\n");
                 if board.black_kingside_castling & board.get_empty()
                     == board.black_kingside_castling
                     && board.find_king(BLACK) == Square::E8
