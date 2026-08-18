@@ -155,8 +155,8 @@ impl Piecee {
 
         // Two forward
         let single_step = match color {
-            WHITE => (pawns >> 8) & board.get_empty(),
-            BLACK => (pawns << 8) & board.get_empty(),
+            WHITE => ((pawns & board.rank_2) >> 8) & board.get_empty(),
+            BLACK => ((pawns & board.rank_7) << 8) & board.get_empty(),
         };
 
         let mut two_forward = match color {
@@ -457,7 +457,6 @@ impl Piecee {
                     == board.black_queenside_castling
                     && board.find_king(BLACK) == Square::E8
                 {
-                    println!("\nBlack Queenside Castling In\n");
                     let _move = moves::Move::new(
                         from_square.clone(),
                         Square::new(2, 0),

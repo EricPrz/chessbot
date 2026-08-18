@@ -240,14 +240,14 @@ impl Square {
         // Konvertiere den Index zurück in das Square-Enum
         let sqr = Square::square_from_number(index as u8);
 
-        println!(
-            "From uci: {} {}, {} {}, {}",
-            file,
-            rank,
-            file_index,
-            rank_index,
-            sqr.to_uci()
-        );
+        // println!(
+        //     "From uci: {} {}, {} {}, {}",
+        //     file,
+        //     rank,
+        //     file_index,
+        //     rank_index,
+        //     sqr.to_uci()
+        // );
 
         sqr
     }

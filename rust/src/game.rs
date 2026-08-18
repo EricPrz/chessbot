@@ -139,6 +139,13 @@ impl Game {
 
         // Special handling for castling
         if move_.is_castle {
+            if board_copy.is_attacked(
+                board_copy.find_king(self.turn),
+                self.turn.opposite(),
+                &self.castling,
+            ) {
+                return false;
+            }
             // Move king
             board_copy.move_piece(move_.from_pos, move_.to_pos);
 
