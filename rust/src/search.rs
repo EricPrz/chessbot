@@ -8,6 +8,8 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
+use rayon::prelude::*;
+
 #[derive(Clone)]
 pub struct SearchNode {
     pub parent: Option<Rc<SearchNode>>,
@@ -71,8 +73,110 @@ impl SearchNode {
         children
     }
 
-    pub fn quiscence(&self, alpha: i32, beta: i32) -> i32 {
-        self.score
+    pub fn get_children_captures(
+        &self,
+        net: &Network,
+        table: &mut TranspositionTable,
+    ) -> Vec<SearchNode> {
+        let mut children = Vec::new();
+
+        for game_child in self.game.get_children() {
+            if let Some(l) = game_child.last_move() {
+                if l.captured.is_none() {
+                    continue;
+                }
+            }
+
+            let fen = game_child.get_fen();
+
+            let score: i32 = if let Some(entry) = table.map.get(&fen) {
+                entry.score
+            } else {
+                net.evaluate(&game_child)
+            };
+
+            let new_node = SearchNode {
+                parent: Some(Rc::new(self.to_owned())),
+                game: game_child,
+                acc: RefCell::new(net.empty_accumulator()),
+                score: score,
+                depth: self.depth + 1,
+            };
+
+            if table.map.get(&fen).is_none() {
+                table.map.insert(fen.clone(), TTEntry::new(&new_node));
+            }
+
+            children.push(new_node);
+        }
+
+        let is_maxing = self.game.turn == WHITE;
+        match is_maxing {
+            true => children.sort_by(|a, b| b.score.cmp(&a.score)),
+            false => children.sort_by(|a, b| a.score.cmp(&b.score)),
+        }
+
+        children
+    }
+
+    pub fn quiscence(
+        &self,
+        mut alpha: i32,
+        beta: i32,
+        net: &Network,
+        table: &mut TranspositionTable,
+    ) -> i32 {
+        // Stand-pat: evaluate current position
+        let stand_pat = self.score;
+
+        // If stand-pat is already above beta, return beta (fail-high)
+        if stand_pat >= beta {
+            return beta;
+        }
+
+        // If stand-pat is better than alpha, update alpha
+        if stand_pat > alpha {
+            alpha = stand_pat;
+        }
+
+        // Generate only CAPTURE moves (and maybe checks)
+        let captures = self.get_children_captures(net, table); // You'll need this method
+
+        // Sort captures by MVV-LVA (Most Valuable Victim - Least Valuable Attacker)
+        // This helps with pruning
+        let mut sorted_captures = captures;
+        sorted_captures.sort_by(|a, b| {
+            b.game
+                .last_move()
+                .unwrap()
+                .captured
+                .unwrap()
+                .piece_type
+                .get_value()
+                .cmp(
+                    &a.game
+                        .last_move()
+                        .unwrap()
+                        .captured
+                        .unwrap()
+                        .piece_type
+                        .get_value(),
+                )
+        });
+
+        for capture_child in sorted_captures {
+            // Recursively search captures (with negamax)
+            let score = -capture_child.quiscence(-beta, -alpha, net, table);
+
+            if score >= beta {
+                return beta; // Beta cut-off
+            }
+            if score > alpha {
+                alpha = score;
+            }
+        }
+
+        alpha // Return the best score found
     }
 
     pub fn alpha_beta(
@@ -85,7 +189,7 @@ impl SearchNode {
     ) -> i32 {
         if depth == 0 {
             let score = if self.game.is_last_move_capture() {
-                self.quiscence(alpha, beta)
+                self.quiscence(alpha, beta, net, table)
             } else {
                 self.score
             };
@@ -178,9 +282,11 @@ impl SearchNode {
                 if entry.depth >= depth {
                     best_score = score;
                     best_move = entry.best_move; // ← THE MOVE!
-                    println!(
+                    log::info!(
                         "Depth {}: score={}, move={:?}",
-                        depth, best_score, best_move
+                        depth,
+                        best_score,
+                        best_move
                     );
                 }
             }

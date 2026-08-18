@@ -381,7 +381,7 @@ impl PieceType {
         piece_map.get(self).expect("No Piece matched.").to_owned()
     }
 
-    fn get_value(&self) -> u8 {
+    pub fn get_value(&self) -> u8 {
         let piece_map: HashMap<PieceType, u8> = HashMap::from([
             (PieceType::PAWN, 1),
             (PieceType::KNIGHT, 3),

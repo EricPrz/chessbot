@@ -83,14 +83,17 @@ fn handle_go(args: &Vec<&str>, game: &Game, net: &Network, table: &mut Transposi
     }
 
     let mut search_node = SearchNode::new_root(game, net, table);
-    let final_move = search_node.iterative_deepening(6, net, table);
+    let final_move = search_node.iterative_deepening(MAX_DEPTH, net, table);
 
     match final_move {
         Some(m) => {
             log::info!("Found Move: {:?}", m);
             println!("bestmove {}", m.to_uci());
         }
-        None => panic!("F"),
+        None => {
+            log::info!("No move found on search");
+            panic!("F");
+        }
     }
 }
 
@@ -105,6 +108,8 @@ fn handle_ponderhit() {
 fn handle_stop() {
     log::info!("stop");
 }
+
+const MAX_DEPTH: i32 = 8;
 
 fn main() {
     // Initialize essentials
