@@ -14,7 +14,7 @@ use rayon::prelude::*;
 pub struct SearchNode {
     pub children: Vec<SearchNode>,
     pub game: Game,
-    pub acc: RefCell<Accumulator>,
+    pub acc: Accumulator,
     pub score: i32,
     pub depth: i32,
 }
@@ -27,7 +27,7 @@ impl SearchNode {
         let new_node = SearchNode {
             children: Vec::new(),
             game: game.clone(),
-            acc: RefCell::new(net.accumulator(game)),
+            acc: net.accumulator(game),
             score: score,
             depth: 0,
         };
@@ -44,17 +44,21 @@ impl SearchNode {
     pub fn get_children(&mut self, net: &Network, table: &mut TranspositionTable) {
         for game_child in self.game.get_children() {
             let fen = game_child.get_fen();
+            let mut child_acc = net.empty_accumulator();
+            net.update(&self.game, &game_child, &self.acc, &mut child_acc);
 
             let score: i32 = if let Some(entry) = table.map.get(&fen) {
                 entry.score
             } else {
-                net.evaluate(&game_child)
+                let acc_eval = net.evaluate_accumulator(&child_acc, game_child.side_to_move());
+                println!("Acc Eval: {}", acc_eval);
+                acc_eval
             };
 
             let new_node = SearchNode {
                 children: Vec::new(),
                 game: game_child,
-                acc: RefCell::new(net.empty_accumulator()),
+                acc: child_acc,
                 score: score,
                 depth: self.depth + 1,
             };
@@ -83,16 +87,21 @@ impl SearchNode {
 
             let fen = game_child.get_fen();
 
+            let mut child_acc = net.empty_accumulator();
+            net.update(&self.game, &game_child, &self.acc, &mut child_acc);
+
             let score: i32 = if let Some(entry) = table.map.get(&fen) {
                 entry.score
             } else {
-                net.evaluate(&game_child)
+                let acc_eval = net.evaluate_accumulator(&child_acc, game_child.side_to_move());
+                println!("Acc Eval: {}", acc_eval);
+                acc_eval
             };
 
             let new_node = SearchNode {
                 children: Vec::new(),
                 game: game_child,
-                acc: RefCell::new(net.empty_accumulator()),
+                acc: child_acc,
                 score: score,
                 depth: self.depth + 1,
             };
