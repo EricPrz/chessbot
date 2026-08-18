@@ -407,6 +407,7 @@ impl Piecee {
                 if board.white_kingside_castling & board.get_empty()
                     == board.white_kingside_castling
                     && board.find_king(WHITE) == Square::E1
+                    && castling_rights.white_kingside
                 {
                     let _move = moves::Move::new(
                         from_square.clone(),
@@ -423,6 +424,7 @@ impl Piecee {
                 if board.white_queenside_castling & board.get_empty()
                     == board.white_queenside_castling
                     && board.find_king(WHITE) == Square::E1
+                    && castling_rights.white_queenside
                 {
                     let _move = moves::Move::new(
                         from_square.clone(),
@@ -440,6 +442,7 @@ impl Piecee {
                 if board.black_kingside_castling & board.get_empty()
                     == board.black_kingside_castling
                     && board.find_king(BLACK) == Square::E8
+                    && castling_rights.black_kingside
                 {
                     let _move = moves::Move::new(
                         from_square.clone(),
@@ -456,6 +459,7 @@ impl Piecee {
                 if board.black_queenside_castling & board.get_empty()
                     == board.black_queenside_castling
                     && board.find_king(BLACK) == Square::E8
+                    && castling_rights.black_queenside
                 {
                     let _move = moves::Move::new(
                         from_square.clone(),

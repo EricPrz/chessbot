@@ -287,16 +287,16 @@ impl Game {
             } else if move_.piece.piece_type == ROOK {
                 // Queenside rook
                 if move_.from_pos.get_col_index() == 0 {
-                    if self.turn == WHITE && move_.from_pos.get_row_index() == 0 {
+                    if self.turn == WHITE && move_.from_pos.get_row_index() == 7 {
                         self.castling.white_queenside = false;
-                    } else if self.turn == BLACK && move_.from_pos.get_row_index() == 7 {
+                    } else if self.turn == BLACK && move_.from_pos.get_row_index() == 0 {
                         self.castling.black_queenside = false;
                     }
                 } else if move_.from_pos.get_col_index() == 7 {
                     // Kingside rook
-                    if self.turn == WHITE && move_.from_pos.get_row_index() == 0 {
+                    if self.turn == WHITE && move_.from_pos.get_row_index() == 7 {
                         self.castling.white_kingside = false;
-                    } else if self.turn == BLACK && move_.from_pos.get_row_index() == 7 {
+                    } else if self.turn == BLACK && move_.from_pos.get_row_index() == 0 {
                         self.castling.black_kingside = false;
                     }
                 }
@@ -314,6 +314,7 @@ impl Game {
         }
 
         self.moves.push(move_);
+        println!("CastlingRights: {:?}", self.castling);
     }
 
     pub fn is_check(&self) -> bool {

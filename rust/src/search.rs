@@ -242,8 +242,12 @@ impl SearchNode {
         }
 
         if best_move.is_none() {
-            let score = if self.game.is_check() {
-                -99999 + depth
+            let score = if self.game.is_checkmate() {
+                99999 + depth
+            } else if self.game.is_stalemate() {
+                -1000
+            } else if self.game.is_draw() {
+                -1000
             } else {
                 0
             };

@@ -51,7 +51,9 @@ fn handle_position(args: &Vec<&str>, game: &mut Game) {
 
         *game = Game::from_fen(fen);
 
-        if args[8] == "moves" {
+        if let Some(m) = args.get(8)
+            && m == &"moves"
+        {
             // let num_moves = args.len() - 9;
             for move_uci in args[9..].iter() {
                 log::info!("UCI Move: {}", move_uci);
@@ -88,6 +90,8 @@ fn handle_go(args: &Vec<&str>, game: &Game, net: &Network, table: &mut Transposi
     match final_move {
         Some(m) => {
             log::info!("Found Move: {:?}", m);
+            log::info!("Move uci: {:?}", m.to_uci());
+            log::info!("CastlingRights: {:?}", game.castling);
             println!("bestmove {}", m.to_uci());
         }
         None => {
