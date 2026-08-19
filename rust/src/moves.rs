@@ -218,8 +218,8 @@ impl Move {
         let is_castling = matches!(san_clean.as_str(), "0-0" | "O-O" | "0-0-0" | "O-O-O");
         if is_castling {
             log::debug!("Castling!!");
-            println!("UCI Castling!!");
-            println!("Castling Rights: {:?}", game.castling);
+            // println!("UCI Castling!!");
+            // println!("Castling Rights: {:?}", game.castling);
             let king_square = game.board.find_king(color);
             let king = game
                 .board
@@ -288,11 +288,11 @@ impl Move {
 
         if !Regex::new(r"^[a-h][1-8]$").unwrap().is_match(dest_str) {
             log::debug!("Failed to parse SAN (invalid destination): {}", san);
-            println!("Failed to parse SAN (invalid destination): {}", san);
+            // println!("Failed to parse SAN (invalid destination): {}", san);
             return None;
         }
 
-        println!("Promoted Piece: {:?}", &promoted_piece);
+        // println!("Promoted Piece: {:?}", &promoted_piece);
 
         let destination_position = Square::from_uci(dest_str);
         log::debug!("Destination Position: {:?}", destination_position);
@@ -322,9 +322,6 @@ impl Move {
         let mut dis_rank: Option<char> = None;
 
         let remainder_chars: Vec<char> = remainder.chars().collect();
-        for char in &remainder_chars {
-            println!("Remainder char: {}", char);
-        }
         match remainder_chars.len() {
             1 => {
                 let c = remainder_chars[0];
@@ -345,22 +342,8 @@ impl Move {
             _ => {}
         }
 
-        if dis_file.is_some() {
-            println!("Dis file: {}", dis_file.unwrap());
-        }
-        if dis_rank.is_some() {
-            println!("Dis rank: {}", dis_rank.unwrap());
-        }
-
         let req_file = dis_file.map(|c| c as u8 - b'a');
         let req_rank = dis_rank.map(|c| c as u8 - b'1');
-
-        if req_file.is_some() {
-            println!("Req file: {}", req_file.unwrap());
-        }
-        if req_rank.is_some() {
-            println!("Req rank: {}", req_rank.unwrap());
-        }
 
         let turn = game.turn;
         let piece = Piecee::new(piece_type, turn);
@@ -374,10 +357,6 @@ impl Move {
 
         for item in all_moves_raw {
             let mv = item;
-
-            println!("Move Raw: {:?}", item);
-            println!("Col Idx: {:?}", mv.from_pos.get_col_index());
-            println!("Row Idx: {:?}", mv.from_pos.get_row_index());
 
             if mv.is_castle {
                 continue;

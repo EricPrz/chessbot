@@ -1,14 +1,12 @@
-use crate::enums::Colorr::{BLACK, WHITE};
-use crate::enums::{PieceType, print_bitboard};
+use crate::enums::Colorr::WHITE;
 use crate::game::Game;
 use crate::moves::Move;
-use crate::piece::Piecee;
 use nnue_rs::{Accumulator, Board, Network};
-use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
-use rayon::prelude::*;
+use std::time::Instant;
 
 #[derive(Clone)]
 pub struct SearchNode {
@@ -51,7 +49,7 @@ impl SearchNode {
                 entry.score
             } else {
                 let acc_eval = net.evaluate_accumulator(&child_acc, game_child.side_to_move());
-                println!("Acc Eval: {}", acc_eval);
+                // println!("Acc Eval: {}", acc_eval);
                 acc_eval
             };
 
@@ -126,7 +124,16 @@ impl SearchNode {
         beta: i32,
         net: &Network,
         table: &mut TranspositionTable,
+        nodes: &mut usize,
+        sel_depth: &mut usize,
+        on_search: &mut bool,
     ) -> i32 {
+        if !*on_search {
+            return self.score; // Return current evaluation
+        }
+
+        *nodes += 1;
+
         // Stand-pat: evaluate current position
         let stand_pat = self.score;
 
@@ -138,6 +145,10 @@ impl SearchNode {
         // If stand-pat is better than alpha, update alpha
         if stand_pat > alpha {
             alpha = stand_pat;
+        }
+
+        if !*on_search {
+            return self.score; // Return current evaluation
         }
 
         // Generate only CAPTURE moves (and maybe checks)
@@ -165,8 +176,16 @@ impl SearchNode {
         });
 
         let mut children = std::mem::take(&mut self.children);
+        if children.len() > 0 {
+            *sel_depth += 1;
+        }
         for capture_child in &mut children {
-            let score = -capture_child.quiscence(-beta, -alpha, net, table);
+            if !*on_search {
+                return self.score; // Return current evaluation
+            }
+
+            let score =
+                -capture_child.quiscence(-beta, -alpha, net, table, nodes, sel_depth, on_search);
 
             if score >= beta {
                 return beta;
@@ -179,129 +198,193 @@ impl SearchNode {
         alpha
     }
 
-    pub fn alpha_beta(
-        &mut self,
-        depth: i32,
-        mut alpha: i32,
-        beta: i32,
-        net: &Network,
-        table: &mut TranspositionTable,
-    ) -> i32 {
-        if depth == 0 {
-            let score = if self.game.is_last_move_capture() {
-                self.quiscence(alpha, beta, net, table)
-            } else {
-                self.score
-            };
-
-            table.store(self, self.game.get_fen(), 0, score, None, TTFlag::Exact);
-            return score;
-        }
-
-        if let Some(entry) = table.map.get(&self.game.get_fen()) {
-            if entry.depth >= depth {
-                if entry.flag == TTFlag::Exact {
-                    return entry.score;
-                }
-                if entry.flag == TTFlag::LowerBound && entry.score >= beta {
-                    return beta;
-                }
-                if entry.flag == TTFlag::UpperBound && entry.score <= alpha {
-                    return alpha;
-                }
-            }
-        }
-
-        self.get_children(net, table);
-        let mut best_score = -i32::MAX;
-        let mut best_move: Option<Move> = None;
-
-        for mut child in self.children.clone() {
-            let score = -child.alpha_beta(depth - 1, -beta, -alpha, net, table);
-
-            if score > best_score {
-                best_score = score;
-                best_move = child.game.last_move();
-            }
-
-            if score >= beta {
-                table.store(
-                    self,
-                    self.game.get_fen(),
-                    depth,
-                    beta,
-                    best_move,
-                    TTFlag::LowerBound,
-                );
-                return beta;
-            }
-
-            if score > alpha {
-                alpha = score;
-            }
-        }
-
-        if best_move.is_none() {
-            let score = if self.game.is_checkmate() {
-                99999 + depth
-            } else if self.game.is_stalemate() {
-                -1000
-            } else if self.game.is_draw() {
-                -1000
-            } else {
-                0
-            };
-
-            table.store(self, self.game.get_fen(), depth, score, None, TTFlag::Exact);
-            return score;
-        }
-
-        table.store(
-            self,
-            self.game.get_fen(),
-            depth,
-            best_score,
-            best_move,
-            TTFlag::Exact,
-        );
-
-        best_score
-    }
-
-    pub fn iterative_deepening(
-        &mut self,
-        max_depth: i32,
-        net: &Network,
-        table: &mut TranspositionTable,
-    ) -> Option<Move> {
-        let mut best_move = None;
-        let mut best_score = -std::i32::MAX;
-
-        for depth in 1..=max_depth {
-            // Search to this depth
-            let score = self.alpha_beta(depth, -std::i32::MAX, std::i32::MAX, net, table);
-
-            // AFTER searching, get the best move from TT
-            if let Some(entry) = table.map.get(&self.game.get_fen()) {
-                if entry.depth >= depth {
-                    best_score = score;
-                    best_move = entry.best_move; // ← THE MOVE!
-                    log::info!(
-                        "Depth {}: score={}, move={:?}",
-                        depth,
-                        best_score,
-                        best_move
-                    );
-                }
-            }
-
-            //if self.time_is_up() {
-            //    break;
-            //}
-        }
-
-        best_move // Return the best move found
-    }
+    // pub fn alpha_beta(
+    //     &mut self,
+    //     depth: i32,
+    //     mut alpha: i32,
+    //     beta: i32,
+    //     net: &Network,
+    //     table: &mut TranspositionTable,
+    //     nodes: &mut usize,
+    //     sel_depth: &mut usize,
+    //     on_search: &mut bool,
+    // ) -> i32 {
+    //     // Check if we should stop searching
+    //     if !*on_search {
+    //         return self.score; // Return current evaluation
+    //     }
+    //
+    //     *nodes += 1;
+    //
+    //     if depth == 0 {
+    //         let score = if self.game.is_last_move_capture() {
+    //             *sel_depth += 1;
+    //             self.quiscence(alpha, beta, net, table, nodes, sel_depth, on_search)
+    //         } else {
+    //             self.score
+    //         };
+    //
+    //         table.store(self, self.game.get_fen(), 0, score, None, TTFlag::Exact);
+    //         return score;
+    //     }
+    //
+    //     if let Some(entry) = table.map.get(&self.game.get_fen()) {
+    //         if entry.depth >= depth {
+    //             if entry.flag == TTFlag::Exact {
+    //                 return entry.score;
+    //             }
+    //             if entry.flag == TTFlag::LowerBound && entry.score >= beta {
+    //                 return beta;
+    //             }
+    //             if entry.flag == TTFlag::UpperBound && entry.score <= alpha {
+    //                 return alpha;
+    //             }
+    //         }
+    //     }
+    //
+    //     if !*on_search {
+    //         return self.score; // Return current evaluation
+    //     }
+    //
+    //     self.get_children(net, table);
+    //     let mut best_score = -i32::MAX;
+    //     let mut best_move: Option<Move> = None;
+    //
+    //     for mut child in self.children.clone() {
+    //         if !*on_search {
+    //             break;
+    //         }
+    //
+    //         let score = -child.alpha_beta(
+    //             depth - 1,
+    //             -beta,
+    //             -alpha,
+    //             net,
+    //             table,
+    //             nodes,
+    //             sel_depth,
+    //             on_search,
+    //         );
+    //
+    //         if score > best_score {
+    //             best_score = score;
+    //             best_move = child.game.last_move();
+    //         }
+    //
+    //         if score >= beta {
+    //             table.store(
+    //                 self,
+    //                 self.game.get_fen(),
+    //                 depth,
+    //                 beta,
+    //                 best_move,
+    //                 TTFlag::LowerBound,
+    //             );
+    //             return beta;
+    //         }
+    //
+    //         if score > alpha {
+    //             alpha = score;
+    //         }
+    //     }
+    //
+    //     if best_move.is_none() {
+    //         let score = if self.game.is_checkmate() {
+    //             99999 + depth
+    //         } else if self.game.is_stalemate() {
+    //             -1000
+    //         } else if self.game.is_draw() {
+    //             -1000
+    //         } else {
+    //             0
+    //         };
+    //
+    //         table.store(self, self.game.get_fen(), depth, score, None, TTFlag::Exact);
+    //         return score;
+    //     }
+    //
+    //     table.store(
+    //         self,
+    //         self.game.get_fen(),
+    //         depth,
+    //         best_score,
+    //         best_move,
+    //         TTFlag::Exact,
+    //     );
+    //
+    //     best_score
+    // }
+    //
+    // pub fn iterative_deepening(
+    //     &mut self,
+    //     max_depth: i32,
+    //     net: &Network,
+    //     table: &mut TranspositionTable,
+    //     on_search: &mut Arc<AtomicBool>,
+    // ) -> Option<Move> {
+    //     let mut best_move = None;
+    //     let mut best_score = -std::i32::MAX;
+    //
+    //     let initial_search_time = Instant::now();
+    //     let mut nodes: usize = 0;
+    //     let mut max_sel_depth = 0;
+    //
+    //     for depth in 1..=max_depth {
+    //         if !*on_search {
+    //             break;
+    //         }
+    //
+    //         let mut sel_depth = 0;
+    //         // Search to this depth
+    //         let score = self.alpha_beta(
+    //             depth,
+    //             -std::i32::MAX,
+    //             std::i32::MAX,
+    //             net,
+    //             table,
+    //             &mut nodes,
+    //             &mut sel_depth,
+    //             on_search,
+    //         );
+    //
+    //         if sel_depth > max_sel_depth {
+    //             max_sel_depth = sel_depth;
+    //         }
+    //
+    //         // AFTER searching, get the best move from TT
+    //         if let Some(entry) = table.map.get(&self.game.get_fen()) {
+    //             if entry.depth >= depth {
+    //                 best_score = score;
+    //                 best_move = entry.best_move; // ← THE MOVE!
+    //                 log::info!(
+    //                     "Depth {}: score={}, move={:?}",
+    //                     depth,
+    //                     best_score,
+    //                     best_move
+    //                 );
+    //                 let elapsed = initial_search_time.elapsed().as_millis() as usize;
+    //                 let elpased_fixed = if elapsed == 0 { 1 } else { elapsed };
+    //                 let nps = (nodes * 1000) / elpased_fixed;
+    //                 println!(
+    //                     "info depth {} seldepth {} score cp {} nodes {} nps {} time {} pv {}",
+    //                     depth,
+    //                     max_sel_depth,
+    //                     score,
+    //                     nodes,
+    //                     nps,
+    //                     elapsed,
+    //                     best_move.unwrap().to_uci()
+    //                 );
+    //             }
+    //         }
+    //
+    //         //if self.time_is_up() {
+    //         //    break;
+    //         //}
+    //     }
+    //
+    //     best_move // Return the best move found
+    // }
 
     // pub fn iddfs(
     //     &mut self,
@@ -402,5 +485,319 @@ impl TranspositionTable {
             entry.best_move = best_move;
             entry.flag = flag;
         }
+    }
+}
+
+impl SearchNode {
+    pub fn iterative_deepening_threaded(
+        &mut self,
+        max_depth: i32,
+        net: &Network,
+        table: &mut TranspositionTable,
+        on_search: &Arc<AtomicBool>,
+    ) -> Option<Move> {
+        let mut best_move = None;
+        let mut best_score = -std::i32::MAX;
+
+        let initial_search_time = Instant::now();
+        let mut nodes: usize = 0;
+        let mut max_sel_depth = 0;
+
+        for depth in 1..=max_depth {
+            // Check if we should stop
+            if !on_search.load(Ordering::SeqCst) {
+                log::info!("Search stopped at depth {}", depth);
+                break;
+            }
+
+            let mut sel_depth = 0;
+            let score = self.alpha_beta_threaded(
+                depth,
+                -std::i32::MAX,
+                std::i32::MAX,
+                net,
+                table,
+                &mut nodes,
+                &mut sel_depth,
+                on_search,
+            );
+
+            if !on_search.load(Ordering::SeqCst) {
+                break;
+            }
+
+            if sel_depth > max_sel_depth {
+                max_sel_depth = sel_depth;
+            }
+
+            if let Some(entry) = table.map.get(&self.game.get_fen()) {
+                if entry.depth >= depth {
+                    best_score = score;
+                    best_move = entry.best_move;
+                    log::info!(
+                        "Depth {}: score={}, move={:?}",
+                        depth,
+                        best_score,
+                        best_move
+                    );
+
+                    let elapsed = initial_search_time.elapsed().as_millis() as usize;
+                    let elapsed_fixed = if elapsed == 0 { 1 } else { elapsed };
+                    let nps = (nodes * 1000) / elapsed_fixed;
+                    println!(
+                        "info depth {} seldepth {} score cp {} nodes {} nps {} time {} pv {}",
+                        depth,
+                        max_sel_depth,
+                        score,
+                        nodes,
+                        nps,
+                        elapsed,
+                        best_move.unwrap().to_uci()
+                    );
+                }
+            }
+        }
+
+        best_move
+    }
+
+    pub fn alpha_beta_threaded(
+        &mut self,
+        depth: i32,
+        mut alpha: i32,
+        beta: i32,
+        net: &Network,
+        table: &mut TranspositionTable,
+        nodes: &mut usize,
+        sel_depth: &mut usize,
+        on_search: &Arc<AtomicBool>,
+    ) -> i32 {
+        // Check if we should stop
+        if !on_search.load(Ordering::SeqCst) {
+            return self.score;
+        }
+
+        *nodes += 1;
+
+        if depth == 0 {
+            let score = if self.game.is_last_move_capture() {
+                *sel_depth += 1;
+                self.quiscence_threaded(alpha, beta, net, table, nodes, sel_depth, on_search)
+            } else {
+                self.score
+            };
+
+            table.store(self, self.game.get_fen(), 0, score, None, TTFlag::Exact);
+            return score;
+        }
+
+        // Check TT
+        if let Some(entry) = table.map.get(&self.game.get_fen()) {
+            if entry.depth >= depth {
+                if entry.flag == TTFlag::Exact {
+                    return entry.score;
+                }
+                if entry.flag == TTFlag::LowerBound && entry.score >= beta {
+                    return beta;
+                }
+                if entry.flag == TTFlag::UpperBound && entry.score <= alpha {
+                    return alpha;
+                }
+            }
+        }
+
+        // Check again before generating children
+        if !on_search.load(Ordering::SeqCst) {
+            return self.score;
+        }
+
+        self.get_children(net, table);
+        let mut best_score = -i32::MAX;
+        let mut best_move: Option<Move> = None;
+
+        for mut child in self.children.clone() {
+            // Check before each recursive call
+            if !on_search.load(Ordering::SeqCst) {
+                break;
+            }
+
+            let score = -child.alpha_beta_threaded(
+                depth - 1,
+                -beta,
+                -alpha,
+                net,
+                table,
+                nodes,
+                sel_depth,
+                on_search,
+            );
+
+            if score > best_score {
+                best_score = score;
+                best_move = child.game.last_move();
+            }
+
+            if score >= beta {
+                table.store(
+                    self,
+                    self.game.get_fen(),
+                    depth,
+                    beta,
+                    best_move,
+                    TTFlag::LowerBound,
+                );
+                return beta;
+            }
+
+            if score > alpha {
+                alpha = score;
+            }
+        }
+
+        if best_move.is_none() {
+            let score = if self.game.is_checkmate() {
+                99999 + depth
+            } else if self.game.is_stalemate() {
+                -1000
+            } else if self.game.is_draw() {
+                -1000
+            } else {
+                0
+            };
+
+            table.store(self, self.game.get_fen(), depth, score, None, TTFlag::Exact);
+            return score;
+        }
+
+        table.store(
+            self,
+            self.game.get_fen(),
+            depth,
+            best_score,
+            best_move,
+            TTFlag::Exact,
+        );
+
+        best_score
+    }
+
+    pub fn quiscence_threaded(
+        &mut self,
+        mut alpha: i32,
+        beta: i32,
+        net: &Network,
+        table: &mut TranspositionTable,
+        nodes: &mut usize,
+        sel_depth: &mut usize,
+        on_search: &Arc<AtomicBool>,
+    ) -> i32 {
+        // Check if we should stop
+        if !on_search.load(Ordering::SeqCst) {
+            return self.score;
+        }
+
+        *nodes += 1;
+
+        let stand_pat = net.evaluate_accumulator(&self.acc, self.game.side_to_move());
+
+        if stand_pat >= beta {
+            return beta;
+        }
+
+        if stand_pat > alpha {
+            alpha = stand_pat;
+        }
+
+        if !on_search.load(Ordering::SeqCst) {
+            return alpha;
+        }
+
+        self.get_children_captures(net, table);
+
+        if !on_search.load(Ordering::SeqCst) {
+            return alpha;
+        }
+
+        // Sort captures by MVV-LVA
+        self.children.sort_by(|a, b| {
+            b.game
+                .last_move()
+                .unwrap()
+                .captured
+                .unwrap()
+                .piece_type
+                .get_value()
+                .cmp(
+                    &a.game
+                        .last_move()
+                        .unwrap()
+                        .captured
+                        .unwrap()
+                        .piece_type
+                        .get_value(),
+                )
+        });
+
+        // self.children.sort_by(|&mut a, mut &b| {
+        //     // Use MVV-LVA scoring
+        //     let a_score = &self.mvv_lva_score(&a.game.last_move().unwrap());
+        //     let b_score = &self.mvv_lva_score(&b.game.last_move().unwrap());
+        //     b_score.cmp(&a_score)
+        // });
+
+        let mut children = std::mem::take(&mut self.children);
+        if children.len() > 0 {
+            *sel_depth += 1;
+        }
+
+        for capture_child in &mut children {
+            if !on_search.load(Ordering::SeqCst) {
+                break;
+            }
+
+            let score = -capture_child
+                .quiscence_threaded(-beta, -alpha, net, table, nodes, sel_depth, on_search);
+
+            if score >= beta {
+                return beta;
+            }
+            if score > alpha {
+                alpha = score;
+            }
+        }
+
+        alpha
+    }
+}
+
+impl SearchNode {
+    fn mvv_lva_score(&self, m: &Move) -> usize {
+        // Most Valuable Victim - Least Valuable Attacker
+        let victim_value = match m.captured {
+            Some(p) => p.piece_type.get_value(),
+            None => 0,
+        } as usize;
+        let attacker_value = match self.game.board.get_piece_at_square(m.from_pos) {
+            Some(p) => p.piece_type.get_value(),
+            None => 0,
+        } as usize;
+        (victim_value * 10) - attacker_value
+    }
+
+    fn move_ordering_score(&self, m: &Move) -> usize {
+        let mut score = 0;
+
+        // Capture moves
+        if m.captured.is_some() {
+            score += 5000 + self.mvv_lva_score(m);
+        }
+
+        // Killer moves (from history)
+        // score += self.killer_heuristic(m);
+
+        // History heuristic
+        // score += self.history_heuristic(m);
+
+        score
     }
 }

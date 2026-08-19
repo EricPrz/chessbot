@@ -1,14 +1,10 @@
 use crate::game::Game;
 use crate::moves::Move;
 use crate::search::{SearchNode, TranspositionTable};
-use std::time;
 
-use log2::*;
-
-use clap::Parser;
-use regex::Regex;
-use std::fs::File;
-use std::io::{self, BufRead, BufReader, Read};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
 
 mod board;
 mod castling;
@@ -18,7 +14,9 @@ mod moves;
 mod piece;
 mod search;
 
-use nnue_rs::{Board, Network};
+use nnue_rs::Network;
+
+const MAX_DEPTH: i32 = 15;
 
 // Pseudocode for the 'uci' command response
 fn handle_uci() {
@@ -77,30 +75,33 @@ fn handle_position(args: &Vec<&str>, game: &mut Game) {
     log::info!("Applied FEN: {}", game.get_fen());
 }
 
-fn handle_go(args: &Vec<&str>, game: &Game, net: &Network, table: &mut TranspositionTable) {
-    log::info!("go");
-
-    for arg in args {
-        log::info!("Arg: {}", arg);
-    }
+fn handle_go_threaded(
+    game: &Game,
+    net: &Network,
+    table: &mut TranspositionTable,
+    on_search: &Arc<AtomicBool>,
+) -> Option<Move> {
+    log::info!("Search started in thread");
 
     let mut search_node = SearchNode::new_root(game, net, table);
-    let final_move = search_node.iterative_deepening(MAX_DEPTH, net, table);
+
+    // Convert AtomicBool to a mutable reference for the search
+    // We'll use a wrapper to check the flag
+    let final_move = search_node.iterative_deepening_threaded(MAX_DEPTH, net, table, on_search);
 
     match final_move {
         Some(m) => {
             log::info!("Found Move: {:?}", m);
             log::info!("Move uci: {:?}", m.to_uci());
-            log::info!("CastlingRights: {:?}", game.castling);
             println!("bestmove {}", m.to_uci());
+            Some(m)
         }
         None => {
             log::info!("No move found on search");
-            panic!("F");
+            None
         }
     }
 }
-
 fn handle_ucinewgame() {
     log::info!("ucinewgame");
 }
@@ -109,19 +110,22 @@ fn handle_ponderhit() {
     log::info!("ponderhit");
 }
 
-fn handle_stop() {
+fn handle_stop(on_search: &mut Arc<AtomicBool>) {
+    *on_search = Arc::new(AtomicBool::new(false));
     log::info!("stop");
 }
-
-const MAX_DEPTH: i32 = 8;
 
 fn main() {
     // Initialize essentials
     let _log2 = log2::open("logs/my_engine.txt").start();
-    let net =
-        Network::from_file("/home/eric/Projects/chessbot/rust/src/nn-47fc8b7fff06.nnue").unwrap();
+    let net = Arc::new(
+        Network::from_file("/home/eric/Projects/chessbot/rust/src/nn-47fc8b7fff06.nnue").unwrap(),
+    );
     let mut table = TranspositionTable::new();
     let mut game = Game::new();
+
+    let on_search = Arc::new(AtomicBool::new(false));
+    let mut search_thread: Option<thread::JoinHandle<Option<Move>>> = None;
 
     loop {
         let mut input = String::new();
@@ -135,9 +139,46 @@ fn main() {
             "ucinewgame" => handle_ucinewgame(),
             "position" => handle_position(&args, &mut game),
             "ponderhit" => handle_ponderhit(),
-            "go" => handle_go(&args, &game, &net, &mut table), // Calls your alpha-beta search!
-            "stop" => handle_stop(),
-            "quit" => break,
+            "go" => {
+                // If there's a previous search thread, wait for it
+                if let Some(thread) = search_thread.take() {
+                    let _ = thread.join();
+                }
+
+                // Reset the flag
+                on_search.store(true, Ordering::SeqCst);
+
+                // Clone data for the thread
+                let net_clone = net.clone(); // Assuming Network implements Clone
+                let game_clone = game.clone();
+                let mut table_clone = TranspositionTable::new();
+                let on_search_clone = Arc::clone(&on_search);
+
+                // Spawn search thread
+                search_thread = Some(thread::spawn(move || {
+                    let result = handle_go_threaded(
+                        &game_clone,
+                        &net_clone,
+                        &mut table_clone,
+                        &on_search_clone,
+                    );
+                    result
+                }));
+            }
+            "stop" => {
+                on_search.store(false, Ordering::SeqCst);
+                // Wait for search thread to finish
+                if let Some(thread) = search_thread.take() {
+                    let _ = thread.join();
+                }
+            }
+            "quit" => {
+                on_search.store(false, Ordering::SeqCst);
+                if let Some(thread) = search_thread.take() {
+                    let _ = thread.join();
+                }
+                break;
+            }
             _ => {} // Ignore unknown commands
         }
     }

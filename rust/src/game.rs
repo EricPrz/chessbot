@@ -314,7 +314,7 @@ impl Game {
         }
 
         self.moves.push(move_);
-        println!("CastlingRights: {:?}", self.castling);
+        // println!("CastlingRights: {:?}", self.castling);
     }
 
     pub fn is_check(&self) -> bool {

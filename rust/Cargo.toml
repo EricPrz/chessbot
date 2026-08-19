@@ -10,3 +10,9 @@ log2 = "0.3.2"
 nnue-rs = "0.4.0"
 rayon = "1.12.0"
 regex = "1.13.1"
+
+[profile.dev]
+opt-level = 0
+
+[profile.release]
+opt-level = 3
