@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 
-use clap::builder::Str;
-
 use crate::enums::Colorr::{BLACK, WHITE};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

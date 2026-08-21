@@ -8,6 +8,7 @@ use crate::{
         PieceType::{self, BISHOP, KING, KNIGHT, PAWN, QUEEN, ROOK},
         Square, get_squares_from_bitboard,
     },
+    game::Game,
     moves::Move,
     piece::Piecee,
 };
@@ -195,7 +196,7 @@ impl Boardd {
     pub fn is_occupied(&self, square: Square) -> bool {
         let piece = self.get_piece_at_square(square);
 
-        return piece.is_none();
+        return piece.is_some();
     }
 
     pub fn is_occupied_by_color(&self, square: Square, color: Colorr) -> bool {
@@ -226,13 +227,13 @@ impl Boardd {
     pub fn set_piece_at_square(&mut self, square: Square, piece: Piecee) {
         let bitboard = self.get_mutable_piece_bitboard(&piece);
         let index = square.to_index();
-        *bitboard |= 1 << index;
+        *bitboard |= 1u64 << index;
     }
 
     pub fn remove_piece_at_square(&mut self, square: Square, piece: Piecee) {
         let bitboard = self.get_mutable_piece_bitboard(&piece);
         let index = square.to_index();
-        *bitboard &= !(1 << index);
+        *bitboard &= !(1u64 << index);
     }
 
     pub fn move_piece(&mut self, from_pos: Square, to_pos: Square) {
@@ -264,14 +265,6 @@ impl Boardd {
                 color: BLACK,
             } => self.get_black_pawns(),
             Piecee {
-                piece_type: BISHOP,
-                color: WHITE,
-            } => self.get_white_bishops(),
-            Piecee {
-                piece_type: BISHOP,
-                color: BLACK,
-            } => self.get_black_bishops(),
-            Piecee {
                 piece_type: KNIGHT,
                 color: WHITE,
             } => self.get_white_knights(),
@@ -279,6 +272,14 @@ impl Boardd {
                 piece_type: KNIGHT,
                 color: BLACK,
             } => self.get_black_knights(),
+            Piecee {
+                piece_type: BISHOP,
+                color: WHITE,
+            } => self.get_white_bishops(),
+            Piecee {
+                piece_type: BISHOP,
+                color: BLACK,
+            } => self.get_black_bishops(),
             Piecee {
                 piece_type: ROOK,
                 color: WHITE,
@@ -317,14 +318,6 @@ impl Boardd {
                 color: BLACK,
             } => self.get_mutable_black_pawns(),
             Piecee {
-                piece_type: BISHOP,
-                color: WHITE,
-            } => self.get_mutable_white_bishops(),
-            Piecee {
-                piece_type: BISHOP,
-                color: BLACK,
-            } => self.get_mutable_black_bishops(),
-            Piecee {
                 piece_type: KNIGHT,
                 color: WHITE,
             } => self.get_mutable_white_knights(),
@@ -332,6 +325,14 @@ impl Boardd {
                 piece_type: KNIGHT,
                 color: BLACK,
             } => self.get_mutable_black_knights(),
+            Piecee {
+                piece_type: BISHOP,
+                color: WHITE,
+            } => self.get_mutable_white_bishops(),
+            Piecee {
+                piece_type: BISHOP,
+                color: BLACK,
+            } => self.get_mutable_black_bishops(),
             Piecee {
                 piece_type: ROOK,
                 color: WHITE,
@@ -612,19 +613,14 @@ impl Boardd {
         board
     }
 
-    pub fn is_attacked(
-        &self,
-        square: Square,
-        by_color: Colorr,
-        castling_rights: &CastlingRights,
-    ) -> bool {
+    pub fn is_attacked(&self, square: Square, by_color: Colorr, game: &Game) -> bool {
         for piece_type in PieceType::iter() {
             if piece_type == KING {
                 continue;
             }
 
             let piece = Piecee::new(piece_type, by_color);
-            let moves = piece.get_pseudo_legal_moves(self, castling_rights);
+            let moves = piece.get_pseudo_legal_moves(game);
 
             let attacking_moves: Vec<Move> = moves
                 .into_iter()

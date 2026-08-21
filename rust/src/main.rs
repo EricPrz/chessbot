@@ -1,20 +1,12 @@
-use crate::game::Game;
-use crate::moves::Move;
-use crate::search::{SearchNode, TranspositionTable};
-
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 
-mod board;
-mod castling;
-mod enums;
-mod game;
-mod moves;
-mod piece;
-mod search;
-
-use nnue_rs::Network;
+use chess_engine::game::Game;
+use chess_engine::moves::Move;
+use chess_engine::search::{TranspositionTable, Zobrist, iterative_deepening_threaded};
+use flexi_logger::{FileSpec, Logger};
+use nnue_rs::{Accumulator, Network};
 
 const MAX_DEPTH: i32 = 15;
 
@@ -36,7 +28,7 @@ fn handle_setoption(args: &Vec<&str>) {
     }
 }
 
-fn handle_position(args: &Vec<&str>, game: &mut Game) {
+fn handle_position(args: &Vec<&str>, game: &mut Game, zobrist: &Zobrist) {
     log::info!("position");
 
     for arg in args {
@@ -48,6 +40,7 @@ fn handle_position(args: &Vec<&str>, game: &mut Game) {
         log::info!("FEN parsed: {}", fen);
 
         *game = Game::from_fen(fen);
+        game.hash = Some(game.compute_hash(zobrist));
 
         if let Some(m) = args.get(8)
             && m == &"moves"
@@ -60,7 +53,7 @@ fn handle_position(args: &Vec<&str>, game: &mut Game) {
 
                 match move_ {
                     Some(m) => {
-                        game._apply_move(m);
+                        game._apply_move(m, zobrist);
                         log::info!("Applied move {}", m.to_uci());
                     }
                     None => {
@@ -76,18 +69,24 @@ fn handle_position(args: &Vec<&str>, game: &mut Game) {
 }
 
 fn handle_go_threaded(
-    game: &Game,
+    game: &mut Game,
     net: &Network,
     table: &mut TranspositionTable,
     on_search: &Arc<AtomicBool>,
+    zobrist: &Zobrist,
 ) -> Option<Move> {
     log::info!("Search started in thread");
 
-    let mut search_node = SearchNode::new_root(game, net, table);
+    // let mut search_node = SearchNode::new_root(game, net, table);
 
     // Convert AtomicBool to a mutable reference for the search
     // We'll use a wrapper to check the flag
-    let final_move = search_node.iterative_deepening_threaded(MAX_DEPTH, net, table, on_search);
+    // let final_move = search_node.iterative_deepening_threaded(MAX_DEPTH, net, table, on_search);
+    let acc = net.accumulator(game);
+    let final_move =
+        iterative_deepening_threaded(game, &acc, MAX_DEPTH, net, table, on_search, zobrist);
+
+    println!("Ended go");
 
     match final_move {
         Some(m) => {
@@ -117,7 +116,11 @@ fn handle_stop(on_search: &mut Arc<AtomicBool>) {
 
 fn main() {
     // Initialize essentials
-    let _log2 = log2::open("logs/my_engine.txt").start();
+    let logger = Logger::try_with_str("info")
+        .unwrap()
+        .log_to_file(FileSpec::default())
+        .start()
+        .unwrap();
     let net = Arc::new(
         Network::from_file("/home/eric/Projects/chessbot/rust/src/nn-47fc8b7fff06.nnue").unwrap(),
     );
@@ -126,6 +129,8 @@ fn main() {
 
     let on_search = Arc::new(AtomicBool::new(false));
     let mut search_thread: Option<thread::JoinHandle<Option<Move>>> = None;
+
+    let zobrist = Arc::new(Zobrist::new());
 
     loop {
         let mut input = String::new();
@@ -137,7 +142,7 @@ fn main() {
             "isready" => println!("readyok"), // Engine is ready
             "setoption" => handle_setoption(&args),
             "ucinewgame" => handle_ucinewgame(),
-            "position" => handle_position(&args, &mut game),
+            "position" => handle_position(&args, &mut game, &zobrist),
             "ponderhit" => handle_ponderhit(),
             "go" => {
                 // If there's a previous search thread, wait for it
@@ -150,17 +155,19 @@ fn main() {
 
                 // Clone data for the thread
                 let net_clone = net.clone(); // Assuming Network implements Clone
-                let game_clone = game.clone();
+                let mut game_clone = game.clone();
                 let mut table_clone = TranspositionTable::new();
                 let on_search_clone = Arc::clone(&on_search);
 
+                let zobrist_clone = Arc::clone(&zobrist); // clone for thread
                 // Spawn search thread
                 search_thread = Some(thread::spawn(move || {
                     let result = handle_go_threaded(
-                        &game_clone,
+                        &mut game_clone,
                         &net_clone,
                         &mut table_clone,
                         &on_search_clone,
+                        &*zobrist_clone,
                     );
                     result
                 }));

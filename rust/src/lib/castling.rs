@@ -1,6 +1,6 @@
 use crate::enums::Colorr;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct CastlingRights {
     pub white_kingside: bool,
     pub black_kingside: bool,
@@ -16,6 +16,25 @@ impl CastlingRights {
             white_queenside: true,
             black_queenside: true,
         }
+    }
+
+    pub fn castling_mask(&self) -> u8 {
+        let mut mask = 0;
+
+        if self.white_kingside {
+            mask |= 1;
+        } // Bit 0
+        if self.white_queenside {
+            mask |= 2;
+        } // Bit 1
+        if self.black_kingside {
+            mask |= 4;
+        } // Bit 2
+        if self.black_queenside {
+            mask |= 8;
+        } // Bit 3
+
+        mask
     }
 
     pub fn get_for_color(&self, color: &Colorr) -> (bool, bool) {

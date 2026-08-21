@@ -12,6 +12,7 @@ use crate::enums::PieceType::QUEEN;
 use crate::enums::PieceType::ROOK;
 use crate::enums::Square;
 use crate::enums::get_squares_from_bitboard;
+use crate::game::Game;
 use crate::moves;
 use crate::moves::Move;
 use crate::piece;
@@ -49,22 +50,34 @@ impl Piecee {
         Piecee::new(piece_type, color)
     }
 
-    pub fn get_pseudo_legal_moves(
-        &self,
-        board: &board::Boardd,
-        castling_rights: &CastlingRights,
-    ) -> vec::Vec<moves::Move> {
+    pub fn piece_index(&self) -> usize {
+        let base = match self.color {
+            WHITE => 0,
+            BLACK => 6,
+        };
+        let offset = match self.piece_type {
+            PieceType::PAWN => 0,
+            PieceType::KNIGHT => 1,
+            PieceType::BISHOP => 2,
+            PieceType::ROOK => 3,
+            PieceType::QUEEN => 4,
+            PieceType::KING => 5,
+        };
+        base + offset
+    }
+
+    pub fn get_pseudo_legal_moves(&self, game: &Game) -> vec::Vec<moves::Move> {
         match self.piece_type {
-            enums::PieceType::PAWN => self.get_pawn_moves(board),
-            enums::PieceType::KNIGHT => self.get_knight_moves(board),
+            enums::PieceType::PAWN => self.get_pawn_moves(game),
+            enums::PieceType::KNIGHT => self.get_knight_moves(game),
             enums::PieceType::BISHOP => {
-                self.get_sliding_moves(board, &[(1, 1), (1, -1), (-1, 1), (-1, -1)])
+                self.get_sliding_moves(game, &[(1, 1), (1, -1), (-1, 1), (-1, -1)])
             }
             enums::PieceType::ROOK => {
-                self.get_sliding_moves(board, &[(1, 0), (-1, 0), (0, 1), (0, -1)])
+                self.get_sliding_moves(game, &[(1, 0), (-1, 0), (0, 1), (0, -1)])
             }
             enums::PieceType::QUEEN => self.get_sliding_moves(
-                board,
+                game,
                 &[
                     (1, 0),
                     (-1, 0),
@@ -76,30 +89,30 @@ impl Piecee {
                     (-1, -1),
                 ],
             ),
-            enums::PieceType::KING => self.get_king_moves(board, castling_rights),
+            enums::PieceType::KING => self.get_king_moves(game),
         }
     }
 
-    pub fn get_pawn_moves(&self, board: &board::Boardd) -> Vec<moves::Move> {
+    pub fn get_pawn_moves(&self, game: &Game) -> Vec<moves::Move> {
         let color = self.color;
 
         let pawns = match color {
-            WHITE => board.get_white_pawns(),
-            BLACK => board.get_black_pawns(),
+            WHITE => game.board.get_white_pawns(),
+            BLACK => game.board.get_black_pawns(),
         };
         let enemy_pieces = match color {
-            WHITE => board.get_blacks(),
-            BLACK => board.get_whites(),
+            WHITE => game.board.get_blacks(),
+            BLACK => game.board.get_whites(),
         };
 
         let mut moves: Vec<moves::Move> = vec::Vec::new();
 
         // One forward
         let mut one_forward = match color {
-            WHITE => pawns >> 8,
-            BLACK => pawns << 8,
+            WHITE => (pawns & game.board.rank_2) >> 8,
+            BLACK => (pawns & game.board.rank_7) << 8,
         };
-        one_forward = one_forward & board.get_empty();
+        one_forward = one_forward & game.board.get_empty();
         while one_forward != 0 {
             // Isolate the MSB
             let msb = one_forward & one_forward.wrapping_neg();
@@ -128,10 +141,13 @@ impl Piecee {
                         from_square,
                         to_square,
                         piece,
-                        None,             // No captured piece
-                        Some(piece_type), // Promotion piece
-                        false,            // is_promotion
-                        false,            // is_castling
+                        None,
+                        Some(piece_type),
+                        false,
+                        false,
+                        game.castling,
+                        game.board.get_en_passant_bitboard(),
+                        game.half_move_clock,
                     );
                     moves.push(_move);
                 }
@@ -141,10 +157,13 @@ impl Piecee {
                     from_square,
                     to_square,
                     piece,
-                    None,  // No captured piece
-                    None,  // No promotion
-                    false, // is_promotion
-                    false, // is_castling
+                    None,
+                    None,
+                    false,
+                    false,
+                    game.castling,
+                    game.board.get_en_passant_bitboard(),
+                    game.half_move_clock,
                 );
                 moves.push(_move);
             }
@@ -155,13 +174,13 @@ impl Piecee {
 
         // Two forward
         let single_step = match color {
-            WHITE => ((pawns & board.rank_2) >> 8) & board.get_empty(),
-            BLACK => ((pawns & board.rank_7) << 8) & board.get_empty(),
+            WHITE => ((pawns & game.board.rank_2) >> 8) & game.board.get_empty(),
+            BLACK => ((pawns & game.board.rank_7) << 8) & game.board.get_empty(),
         };
 
         let mut two_forward = match color {
-            WHITE => (single_step >> 8) & board.get_empty(),
-            BLACK => (single_step << 8) & board.get_empty(),
+            WHITE => (single_step >> 8) & game.board.get_empty(),
+            BLACK => (single_step << 8) & game.board.get_empty(),
         };
         while two_forward != 0 {
             // Isolate the MSB
@@ -187,6 +206,9 @@ impl Piecee {
                 None,  // is promotion
                 false, // is_castle
                 true,  // is_en_passant
+                game.castling,
+                game.board.get_en_passant_bitboard(),
+                game.half_move_clock,
             );
             moves.push(_move);
 
@@ -216,7 +238,7 @@ impl Piecee {
                 let to_square_num = 63 - msb2.leading_zeros() as usize;
                 let to_square = enums::Square::square_from_number(to_square_num as u8);
 
-                let captured = board.get_piece_at_square(to_square);
+                let captured = game.board.get_piece_at_square(to_square);
 
                 let promotion_row: u8 = match color {
                     WHITE => 0,
@@ -236,6 +258,9 @@ impl Piecee {
                             Some(piece_type), // Promotion piece
                             false,            // is_promotion
                             false,            // is_castling
+                            game.castling,
+                            game.board.get_en_passant_bitboard(),
+                            game.half_move_clock,
                         );
                         moves.push(_move);
                     }
@@ -249,6 +274,9 @@ impl Piecee {
                         None,     // No promotion
                         false,    // is_promotion
                         false,    // is_castling
+                        game.castling,
+                        game.board.get_en_passant_bitboard(),
+                        game.half_move_clock,
                     );
                     moves.push(_move);
                 }
@@ -261,7 +289,7 @@ impl Piecee {
         }
 
         // En Passant
-        let en_passant_bitboard = board.get_en_passant_bitboard().clone();
+        let en_passant_bitboard = game.board.get_en_passant_bitboard().clone();
         if en_passant_bitboard != 0 {
             let msb = en_passant_bitboard & en_passant_bitboard.wrapping_neg();
             let to_square_num = 63 - msb.leading_zeros() as usize;
@@ -275,21 +303,43 @@ impl Piecee {
             let piece = piece::Piecee::new(enums::PieceType::PAWN, color.clone());
             let captured = Piecee::new(PAWN, color.opposite());
 
-            if board.is_there_piece_at_square(
+            if game.board.is_there_piece_at_square(
                 &piece,
                 Square::square_from_number(from_pos_num as u8 + 1),
             ) {
                 let from_pos = Square::square_from_number(from_pos_num as u8 + 1);
-                let move_ = Move::new(from_pos, to_pos, piece, Some(captured), None, false, true);
+                let move_ = Move::new(
+                    from_pos,
+                    to_pos,
+                    piece,
+                    Some(captured),
+                    None,
+                    false,
+                    true,
+                    game.castling,
+                    game.board.get_en_passant_bitboard(),
+                    game.half_move_clock,
+                );
                 moves.push(move_);
             }
 
-            if board.is_there_piece_at_square(
+            if game.board.is_there_piece_at_square(
                 &piece,
                 Square::square_from_number(from_pos_num as u8 - 1),
             ) {
                 let from_pos = Square::square_from_number(from_pos_num as u8 - 1);
-                let move_ = Move::new(from_pos, to_pos, piece, Some(captured), None, false, true);
+                let move_ = Move::new(
+                    from_pos,
+                    to_pos,
+                    piece,
+                    Some(captured),
+                    None,
+                    false,
+                    true,
+                    game.castling,
+                    game.board.get_en_passant_bitboard(),
+                    game.half_move_clock,
+                );
                 moves.push(move_);
             }
         }
@@ -297,19 +347,19 @@ impl Piecee {
         moves
     }
 
-    fn get_knight_moves(&self, board: &board::Boardd) -> Vec<moves::Move> {
+    fn get_knight_moves(&self, game: &Game) -> Vec<moves::Move> {
         let knight_moves = KnightMoves::new();
 
         let mut moves: Vec<moves::Move> = vec::Vec::new();
 
         let color = &self.color;
         let enemy_bitboard = match color {
-            enums::Colorr::WHITE => board.get_blacks(),
-            enums::Colorr::BLACK => board.get_whites(),
+            enums::Colorr::WHITE => game.board.get_blacks(),
+            enums::Colorr::BLACK => game.board.get_whites(),
         };
         let mut knights = match color {
-            enums::Colorr::WHITE => board.get_white_knights(),
-            enums::Colorr::BLACK => board.get_black_knights(),
+            enums::Colorr::WHITE => game.board.get_white_knights(),
+            enums::Colorr::BLACK => game.board.get_black_knights(),
         };
 
         while knights != 0 {
@@ -322,7 +372,7 @@ impl Piecee {
 
             // Get precomputed moves for this square
             let mut knight_moves_from_square =
-                knight_moves.moves[from_square_num] & (enemy_bitboard | board.get_empty());
+                knight_moves.moves[from_square_num] & (enemy_bitboard | game.board.get_empty());
 
             let piece = piece::Piecee::new(enums::PieceType::KNIGHT, color.clone());
 
@@ -331,7 +381,7 @@ impl Piecee {
                 let to_square_num = 63 - msb2.leading_zeros() as usize;
                 let to_square = enums::Square::square_from_number(to_square_num as u8);
 
-                let captured = board.get_piece_at_square(to_square);
+                let captured = game.board.get_piece_at_square(to_square);
 
                 let _move = moves::Move::new(
                     from_square.clone(),
@@ -341,6 +391,9 @@ impl Piecee {
                     None,
                     false,
                     false,
+                    game.castling,
+                    game.board.get_en_passant_bitboard(),
+                    game.half_move_clock,
                 );
                 moves.push(_move);
 
@@ -354,29 +407,25 @@ impl Piecee {
         moves
     }
 
-    pub fn get_king_moves(
-        &self,
-        board: &board::Boardd,
-        castling_rights: &CastlingRights,
-    ) -> Vec<Move> {
+    pub fn get_king_moves(&self, game: &Game) -> Vec<Move> {
         let mut moves: Vec<Move> = Vec::new();
         let king_moves = KingMoves::new();
 
         let color = &self.color;
         let enemy_bitboard = match color {
-            enums::Colorr::WHITE => board.get_blacks(),
-            enums::Colorr::BLACK => board.get_whites(),
+            enums::Colorr::WHITE => game.board.get_blacks(),
+            enums::Colorr::BLACK => game.board.get_whites(),
         };
         let king = match color {
-            enums::Colorr::WHITE => board.get_white_king(),
-            enums::Colorr::BLACK => board.get_black_king(),
+            enums::Colorr::WHITE => game.board.get_white_king(),
+            enums::Colorr::BLACK => game.board.get_black_king(),
         };
 
         let squares = get_squares_from_bitboard(&king);
         let from_square = squares.get(0).expect("There should be only one king.");
 
         let king_moves_bit = king_moves.moves[from_square.to_index() as usize];
-        let mut king_moves = king_moves_bit & (enemy_bitboard | board.get_empty());
+        let mut king_moves = king_moves_bit & (enemy_bitboard | game.board.get_empty());
 
         let piece = piece::Piecee::new(enums::PieceType::KING, color.clone());
 
@@ -385,7 +434,7 @@ impl Piecee {
             let to_square_num = 63 - msb.leading_zeros() as usize;
             let to_square = enums::Square::square_from_number(to_square_num as u8);
 
-            let captured = board.get_piece_at_square(to_square);
+            let captured = game.board.get_piece_at_square(to_square);
 
             let _move = moves::Move::new(
                 from_square.clone(),
@@ -395,6 +444,9 @@ impl Piecee {
                 None,
                 false,
                 false,
+                game.castling,
+                game.board.get_en_passant_bitboard(),
+                game.half_move_clock,
             );
             moves.push(_move);
 
@@ -404,10 +456,10 @@ impl Piecee {
         // Castling
         match color {
             WHITE => {
-                if board.white_kingside_castling & board.get_empty()
-                    == board.white_kingside_castling
-                    && board.find_king(WHITE) == Square::E1
-                    && castling_rights.white_kingside
+                if game.board.white_kingside_castling & game.board.get_empty()
+                    == game.board.white_kingside_castling
+                    && game.board.find_king(WHITE) == Square::E1
+                    && game.castling.white_kingside
                 {
                     let _move = moves::Move::new(
                         from_square.clone(),
@@ -417,14 +469,17 @@ impl Piecee {
                         None,
                         true,
                         false,
+                        game.castling,
+                        game.board.get_en_passant_bitboard(),
+                        game.half_move_clock,
                     );
                     moves.push(_move);
                 }
 
-                if board.white_queenside_castling & board.get_empty()
-                    == board.white_queenside_castling
-                    && board.find_king(WHITE) == Square::E1
-                    && castling_rights.white_queenside
+                if game.board.white_queenside_castling & game.board.get_empty()
+                    == game.board.white_queenside_castling
+                    && game.board.find_king(WHITE) == Square::E1
+                    && game.castling.white_queenside
                 {
                     let _move = moves::Move::new(
                         from_square.clone(),
@@ -434,15 +489,18 @@ impl Piecee {
                         None,
                         true,
                         false,
+                        game.castling,
+                        game.board.get_en_passant_bitboard(),
+                        game.half_move_clock,
                     );
                     moves.push(_move);
                 }
             }
             BLACK => {
-                if board.black_kingside_castling & board.get_empty()
-                    == board.black_kingside_castling
-                    && board.find_king(BLACK) == Square::E8
-                    && castling_rights.black_kingside
+                if game.board.black_kingside_castling & game.board.get_empty()
+                    == game.board.black_kingside_castling
+                    && game.board.find_king(BLACK) == Square::E8
+                    && game.castling.black_kingside
                 {
                     let _move = moves::Move::new(
                         from_square.clone(),
@@ -452,14 +510,17 @@ impl Piecee {
                         None,
                         true,
                         false,
+                        game.castling,
+                        game.board.get_en_passant_bitboard(),
+                        game.half_move_clock,
                     );
                     moves.push(_move);
                 }
 
-                if board.black_queenside_castling & board.get_empty()
-                    == board.black_queenside_castling
-                    && board.find_king(BLACK) == Square::E8
-                    && castling_rights.black_queenside
+                if game.board.black_queenside_castling & game.board.get_empty()
+                    == game.board.black_queenside_castling
+                    && game.board.find_king(BLACK) == Square::E8
+                    && game.castling.black_queenside
                 {
                     let _move = moves::Move::new(
                         from_square.clone(),
@@ -469,6 +530,9 @@ impl Piecee {
                         None,
                         true,
                         false,
+                        game.castling,
+                        game.board.get_en_passant_bitboard(),
+                        game.half_move_clock,
                     );
                     moves.push(_move);
                 }
@@ -478,11 +542,11 @@ impl Piecee {
         moves
     }
 
-    fn get_sliding_moves(&self, board: &Boardd, directions: &[(i32, i32)]) -> Vec<Move> {
+    fn get_sliding_moves(&self, game: &Game, directions: &[(i32, i32)]) -> Vec<Move> {
         let mut moves: Vec<Move> = Vec::new();
         let color = self.color;
 
-        let bitboard = board.get_piece_bitboard(self);
+        let bitboard = game.board.get_piece_bitboard(self);
         let numbers = enums::get_positions_from_bitboard(&bitboard);
 
         for number in numbers {
@@ -503,7 +567,7 @@ impl Piecee {
                 {
                     let target_index = (current_rank * 8 + current_file) as u8;
                     let to_pos = Square::square_from_number(target_index);
-                    let piece_at_target = board.get_piece_at_square(to_pos);
+                    let piece_at_target = game.board.get_piece_at_square(to_pos);
                     // println!("Start sqr: {} {}", start_file, start_rank);
                     // println!("Current sqr: {} {}", current_file, current_rank);
                     // println!(
@@ -530,6 +594,9 @@ impl Piecee {
                                 None,
                                 false,
                                 false,
+                                game.castling,
+                                game.board.get_en_passant_bitboard(),
+                                game.half_move_clock,
                             );
                             moves.push(_move);
                         }
@@ -544,6 +611,9 @@ impl Piecee {
                                     None,
                                     false,
                                     false,
+                                    game.castling,
+                                    game.board.get_en_passant_bitboard(),
+                                    game.half_move_clock,
                                 );
                                 moves.push(_move);
                             }

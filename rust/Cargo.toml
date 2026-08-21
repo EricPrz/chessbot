@@ -1,15 +1,28 @@
 [package]
-name = "rust"
+name = "chess-engine"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
 clap = { version = "4.6.6", features = ["derive"] }
-log = "0.4.33"
-log2 = "0.3.2"
+flexi_logger = "0.31.10"
+log = {
+  version = "0.4.33",
+  features = [
+    "release_max_level_warn"
+  ]
+}
 nnue-rs = "0.4.0"
+rand = "0.10.2"
 rayon = "1.12.0"
 regex = "1.13.1"
+
+[lib]
+path = "src/lib/mod.rs"
+
+[[bin]]
+name = "debug"
+path = "src/bin/debug.rs"
 
 [profile.dev]
 opt-level = 0
