@@ -683,7 +683,6 @@ impl Board for Game {
 
                 let sqrs = get_squares_from_bitboard(&bitboard);
                 for sqr in sqrs {
-                    log::info!("Idx: {}", sqr.to_index());
                     if sqr.to_index() > 63 {
                         log::info!("Sqr index greater than 63: {}", sqr.to_index());
                         panic!("Error at puting sqr to network");

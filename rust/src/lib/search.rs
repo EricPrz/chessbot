@@ -27,6 +27,7 @@ pub struct TTEntry {
     pub score: i32,
     pub best_move: Option<Move>,
     pub flag: TTFlag,
+    pub is_pv: bool,
 }
 
 #[derive(Clone)]
@@ -63,6 +64,7 @@ impl TranspositionTable {
                     score: 0,
                     best_move: None,
                     flag: TTFlag::Exact,
+                    is_pv: false
                 };
                 TT_SIZE
             ],
@@ -111,6 +113,7 @@ pub fn iterative_deepening_threaded(
             &mut sel_depth,
             on_search,
             zobrist,
+            true,
         );
 
         if !on_search.load(Ordering::SeqCst) {
@@ -165,6 +168,7 @@ pub fn alpha_beta_threaded(
     sel_depth: &mut usize,
     on_search: &Arc<AtomicBool>,
     zobrist: &Zobrist,
+    is_pv: bool,
 ) -> i32 {
     let alpha_orig = alpha;
     log::debug!(
@@ -203,6 +207,7 @@ pub fn alpha_beta_threaded(
             score: score,
             best_move: None,
             flag: TTFlag::Exact,
+            is_pv: is_pv,
         };
 
         table.store(hash, ttentry);
@@ -277,6 +282,7 @@ pub fn alpha_beta_threaded(
     let sorted_moves: Vec<Move> = move_scores.iter().map(|&i| moves_[i.0]).collect();
     let moves_ = sorted_moves;
 
+    let mut first_move = true;
     for move_ in moves_ {
         log::info!("Move: {}", &move_.to_uci());
         log::info!(
@@ -300,19 +306,60 @@ pub fn alpha_beta_threaded(
         let mut acc = net.empty_accumulator();
         net.update(&parent, game, parent_acc, &mut acc);
 
-        let score = -alpha_beta_threaded(
-            game,
-            &acc,
-            depth - 1,
-            -beta,
-            -alpha,
-            net,
-            table,
-            nodes,
-            sel_depth,
-            on_search,
-            zobrist,
-        );
+        let mut score: i32;
+
+        if first_move {
+            // First move: full window search (PV)
+            score = -alpha_beta_threaded(
+                game,
+                &acc,
+                depth - 1,
+                -beta,
+                -alpha,
+                net,
+                table,
+                nodes,
+                sel_depth,
+                on_search,
+                zobrist,
+                true,
+            );
+            first_move = false;
+        } else {
+            // Try a null-window search first (faster)
+            score = -alpha_beta_threaded(
+                game,
+                &acc,
+                depth - 1,
+                -alpha - 1, // Null window: (alpha, alpha+1)
+                -alpha,
+                net,
+                table,
+                nodes,
+                sel_depth,
+                on_search,
+                zobrist,
+                false,
+            );
+
+            // If the null-window search fails (score > alpha), re-search with full window
+            if score > alpha && score < beta {
+                score = -alpha_beta_threaded(
+                    game,
+                    &acc,
+                    depth - 1,
+                    -beta,
+                    -alpha,
+                    net,
+                    table,
+                    nodes,
+                    sel_depth,
+                    on_search,
+                    zobrist,
+                    true,
+                );
+            }
+        }
 
         log::info!("After move: {:?}", move_);
         game.board.print();
@@ -335,6 +382,7 @@ pub fn alpha_beta_threaded(
                 score: beta,
                 best_move: best_move,
                 flag: TTFlag::LowerBound,
+                is_pv: is_pv,
             };
             // table.store(hash, depth, beta, best_move, TTFlag::LowerBound);
             table.store(hash, ttentry);
@@ -363,6 +411,7 @@ pub fn alpha_beta_threaded(
             score: score,
             best_move: None,
             flag: TTFlag::Exact,
+            is_pv: is_pv,
         };
 
         table.store(hash, ttentry);
@@ -383,6 +432,7 @@ pub fn alpha_beta_threaded(
         score: best_score,
         best_move: best_move,
         flag: flag,
+        is_pv: is_pv,
     };
 
     table.store(hash, ttentry);

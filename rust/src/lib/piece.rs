@@ -423,11 +423,24 @@ impl Piecee {
             enums::Colorr::BLACK => game.board.get_black_king(),
         };
 
+        let enemy_king_square = match color {
+            enums::Colorr::WHITE => game.board.find_king(BLACK),
+            enums::Colorr::BLACK => game.board.find_king(WHITE),
+        };
+        let enemy_king_attacks = king_moves.moves[enemy_king_square.to_index() as usize];
+
         let squares = get_squares_from_bitboard(&king);
         let from_square = squares.get(0).expect("There should be only one king.");
 
         let king_moves_bit = king_moves.moves[from_square.to_index() as usize];
-        let mut king_moves = king_moves_bit & (enemy_bitboard | game.board.get_empty());
+
+        let friendly_pieces = match color {
+            enums::Colorr::WHITE => game.board.get_whites(),
+            enums::Colorr::BLACK => game.board.get_blacks(),
+        };
+
+        // let mut king_moves = king_moves_bit & (enemy_bitboard | game.board.get_empty());
+        let mut king_moves = king_moves_bit & !enemy_king_attacks & !friendly_pieces;
 
         let piece = piece::Piecee::new(enums::PieceType::KING, color.clone());
 

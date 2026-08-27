@@ -1,2 +1,4 @@
 libtorch/
 rust/target/
+rust/target/*
+*.log
