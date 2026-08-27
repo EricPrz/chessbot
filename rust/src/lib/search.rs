@@ -121,9 +121,9 @@ pub fn sort_moves(
 
         // MVV-LVA
         if let Some(captured_piece) = move_.captured {
-            let victim = captured_piece.piece_type.get_value() * 100;
-            let attacker = move_.piece.piece_type.get_value() * 100;
-            let mvv_lva_score = victim as i32 * 10 - attacker as i32;
+            let victim = captured_piece.piece_type.get_value() as i32 * 1000;
+            let attacker = move_.piece.piece_type.get_value() as i32 * 1000;
+            let mvv_lva_score = victim * 1000 - attacker;
             move_scores.push((i, mvv_lva_score));
             continue;
         }
@@ -142,41 +142,6 @@ pub fn sort_moves(
         }
 
         move_scores.push((i, 0));
-    }
-
-    move_scores.sort_by(|a, b| b.1.cmp(&a.1));
-
-    // Reorder moves based on sorted indices
-    let sorted_moves: Vec<Move> = move_scores.iter().map(|&i| moves_[i.0]).collect();
-    sorted_moves
-}
-
-pub fn sort_moves_nnue(
-    game: &mut Game,
-    moves_: Vec<Move>,
-    parent: &Game,
-    parent_acc: &Accumulator,
-    tt_move: Option<Move>,
-    net: &Network,
-    zobrist: &Zobrist,
-) -> Vec<Move> {
-    let mut move_scores: Vec<(usize, i32)> = Vec::with_capacity(moves_.len());
-
-    for (i, &move_) in moves_.iter().enumerate() {
-        if Some(move_) == tt_move {
-            // Give TT move maximum possible priority to ensure it sorts first
-            move_scores.push((i, i32::MAX));
-            continue;
-        }
-
-        game._apply_move(move_, zobrist);
-        let mut acc = net.empty_accumulator();
-        net.update(parent, game, parent_acc, &mut acc);
-
-        let score = net.evaluate_accumulator(&acc, parent.side_to_move());
-        move_scores.push((i, score));
-
-        game.unmake_move();
     }
 
     move_scores.sort_by(|a, b| b.1.cmp(&a.1));

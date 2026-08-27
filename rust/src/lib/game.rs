@@ -156,7 +156,7 @@ impl Game {
     pub fn get_legal_captures(&self) -> Vec<Move> {
         self._generate_pseudo_legal_moves()
             .into_iter()
-            .filter(|m| self._is_legal_move(m) && m.captured.is_some())
+            .filter(|m| self._is_legal_move(m) && (m.captured.is_some() || m.promotion.is_some()))
             .collect()
     }
 
