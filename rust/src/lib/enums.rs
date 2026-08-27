@@ -283,6 +283,16 @@ pub fn get_positions_from_bitboard(_bitboard: &u64) -> Vec<u8> {
 
         // Find the square index (0-63)
         let position = 63 - msb.leading_zeros() as u8;
+
+        if position >= 64 {
+            log::error!(
+                "Invalid bit position {} in bitboard: {:016x}",
+                position,
+                bitboard
+            );
+            break;
+        }
+
         positions.push(position);
 
         // Remove the processed bit
@@ -311,7 +321,7 @@ pub fn get_squares_from_bitboard(_bitboard: &u64) -> Vec<Square> {
     squares
 }
 
-#[derive(PartialEq, Clone, Copy, Debug)]
+#[derive(PartialEq, Clone, Copy, Debug, Eq)]
 pub enum Colorr {
     WHITE,
     BLACK,

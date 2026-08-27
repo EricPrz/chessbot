@@ -25,7 +25,7 @@ use nnue_rs::{Piece, PieceKind};
 
 use std::vec;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Piecee {
     pub piece_type: enums::PieceType,
     pub color: enums::Colorr,
@@ -109,8 +109,8 @@ impl Piecee {
 
         // One forward
         let mut one_forward = match color {
-            WHITE => (pawns & game.board.rank_2) >> 8,
-            BLACK => (pawns & game.board.rank_7) << 8,
+            WHITE => pawns >> 8,
+            BLACK => pawns << 8,
         };
         one_forward = one_forward & game.board.get_empty();
         while one_forward != 0 {
@@ -205,7 +205,7 @@ impl Piecee {
                 None,  // No captured piece
                 None,  // is promotion
                 false, // is_castle
-                true,  // is_en_passant
+                false, // is_en_passant
                 game.castling,
                 game.board.get_en_passant_bitboard(),
                 game.half_move_clock,
@@ -306,7 +306,8 @@ impl Piecee {
             if game.board.is_there_piece_at_square(
                 &piece,
                 Square::square_from_number(from_pos_num as u8 + 1),
-            ) {
+            ) && to_pos.get_col_index() != 7
+            {
                 let from_pos = Square::square_from_number(from_pos_num as u8 + 1);
                 let move_ = Move::new(
                     from_pos,
@@ -326,7 +327,8 @@ impl Piecee {
             if game.board.is_there_piece_at_square(
                 &piece,
                 Square::square_from_number(from_pos_num as u8 - 1),
-            ) {
+            ) && to_pos.get_col_index() != 0
+            {
                 let from_pos = Square::square_from_number(from_pos_num as u8 - 1);
                 let move_ = Move::new(
                     from_pos,

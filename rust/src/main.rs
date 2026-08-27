@@ -1,14 +1,14 @@
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, RwLock};
 use std::thread;
 
 use chess_engine::game::Game;
 use chess_engine::moves::Move;
 use chess_engine::search::{TranspositionTable, Zobrist, iterative_deepening_threaded};
-use flexi_logger::{FileSpec, Logger};
+use flexi_logger::{Duplicate, FileSpec, Logger};
 use nnue_rs::{Accumulator, Network};
 
-const MAX_DEPTH: i32 = 15;
+const MAX_DEPTH: i32 = 6;
 
 // Pseudocode for the 'uci' command response
 fn handle_uci() {
@@ -71,22 +71,22 @@ fn handle_position(args: &Vec<&str>, game: &mut Game, zobrist: &Zobrist) {
 fn handle_go_threaded(
     game: &mut Game,
     net: &Network,
-    table: &mut TranspositionTable,
+    table: Arc<RwLock<TranspositionTable>>,
     on_search: &Arc<AtomicBool>,
     zobrist: &Zobrist,
 ) -> Option<Move> {
     log::info!("Search started in thread");
 
     // let mut search_node = SearchNode::new_root(game, net, table);
-
+    let mut table = table.write().unwrap();
     // Convert AtomicBool to a mutable reference for the search
     // We'll use a wrapper to check the flag
     // let final_move = search_node.iterative_deepening_threaded(MAX_DEPTH, net, table, on_search);
     let acc = net.accumulator(game);
     let final_move =
-        iterative_deepening_threaded(game, &acc, MAX_DEPTH, net, table, on_search, zobrist);
+        iterative_deepening_threaded(game, &acc, MAX_DEPTH, net, &mut *table, on_search, zobrist);
 
-    println!("Ended go");
+    log::info!("Ended go");
 
     match final_move {
         Some(m) => {
@@ -96,6 +96,7 @@ fn handle_go_threaded(
             Some(m)
         }
         None => {
+            // println!("Dindnt found a moveeeeeeeeeeeeee");
             log::info!("No move found on search");
             None
         }
@@ -116,15 +117,19 @@ fn handle_stop(on_search: &mut Arc<AtomicBool>) {
 
 fn main() {
     // Initialize essentials
+
+    // let logger = Logger::try_with_str(spec)
     let logger = Logger::try_with_str("info")
         .unwrap()
         .log_to_file(FileSpec::default())
+        .duplicate_to_stdout(Duplicate::Info)
         .start()
         .unwrap();
+    log::info!("ENgine started");
     let net = Arc::new(
         Network::from_file("/home/eric/Projects/chessbot/rust/src/nn-47fc8b7fff06.nnue").unwrap(),
     );
-    let mut table = TranspositionTable::new();
+    let table = Arc::new(RwLock::new(TranspositionTable::new()));
     let mut game = Game::new();
 
     let on_search = Arc::new(AtomicBool::new(false));
@@ -156,7 +161,8 @@ fn main() {
                 // Clone data for the thread
                 let net_clone = net.clone(); // Assuming Network implements Clone
                 let mut game_clone = game.clone();
-                let mut table_clone = TranspositionTable::new();
+
+                let table_clone = Arc::clone(&table);
                 let on_search_clone = Arc::clone(&on_search);
 
                 let zobrist_clone = Arc::clone(&zobrist); // clone for thread
@@ -165,7 +171,7 @@ fn main() {
                     let result = handle_go_threaded(
                         &mut game_clone,
                         &net_clone,
-                        &mut table_clone,
+                        table_clone,
                         &on_search_clone,
                         &*zobrist_clone,
                     );
@@ -187,6 +193,99 @@ fn main() {
                 break;
             }
             _ => {} // Ignore unknown commands
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*; // Adjust imports based on where you place this
+    use chess_engine::game::Game;
+    use nnue_rs::{Board, Network};
+
+    #[test]
+    fn test_nnue_perspective() {
+        // 1. Load your network
+        let net = Network::from_file("/home/eric/Projects/chessbot/rust/src/nn-47fc8b7fff06.nnue")
+            .unwrap();
+
+        // 2. Set up a FEN where Black is completely winning (White is missing their Queen)
+        // Notice the 'w' - it is White's turn to move.
+        let mut game_white_to_move = Game::from_fen(String::from(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNB1KBNR w KQkq - 0 1",
+        ));
+        let acc_w = net.accumulator(&game_white_to_move);
+        let eval_w = net.evaluate_accumulator(&acc_w, game_white_to_move.side_to_move());
+
+        // 3. Set up the exact same FEN, but change the side to move to Black ('b')
+        let mut game_black_to_move = Game::from_fen(String::from(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNB1KBNR b KQkq - 0 1",
+        ));
+        let acc_b = net.accumulator(&game_black_to_move);
+        let eval_b = net.evaluate_accumulator(&acc_b, game_black_to_move.side_to_move());
+
+        println!("--- NNUE Perspective Test ---");
+        println!("Black is up a Queen in both positions.");
+        println!("Raw Eval (White's turn): {}", eval_w);
+        println!("Raw Eval (Black's turn): {}", eval_b);
+        println!("-----------------------------");
+
+        // We can safely assume Black is winning here.
+        // Let's analyze what the numbers mean:
+        if eval_w < 0 && eval_b < 0 {
+            println!("Result: Your NNUE uses WHITE'S PERSPECTIVE.");
+            println!("(You MUST flip the score in Negamax when it is Black's turn)");
+        } else if eval_w < 0 && eval_b > 0 {
+            println!("Result: Your NNUE uses SIDE-TO-MOVE PERSPECTIVE.");
+            println!("(Do not flip the evaluation score in Negamax)");
+        } else {
+            println!("Result: Something is deeply wrong with the evaluation function!");
+        }
+    }
+
+    #[test]
+    fn test_zobrist_side_to_move() {
+        let zobrist = Zobrist::new();
+
+        // 1. Starting position (White's turn)
+        let mut game_w = Game::from_fen(String::from(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        ));
+        let hash_w = game_w.compute_hash(&zobrist);
+
+        // 2. Exact same board, but Black's turn
+        let mut game_b = Game::from_fen(String::from(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1",
+        ));
+        let hash_b = game_b.compute_hash(&zobrist);
+
+        println!("--- Zobrist Hash Test ---");
+        println!("White to move hash: {}", hash_w);
+        println!("Black to move hash: {}", hash_b);
+        println!("-------------------------");
+
+        if hash_w == hash_b {
+            println!("CRITICAL BUG: Your hashes are identical!");
+            println!("Black is using White's evaluations from the Transposition Table.");
+        } else {
+            println!("PASS: Hashes are different. Side-to-move is working in your FEN parser.");
+
+            // Step 3: Let's test if make/unmake move correctly toggles the hash
+            let original_hash = game_w.compute_hash(&zobrist);
+            let moves = game_w.get_legal_moves();
+
+            // Just apply and unmake the first legal move
+            game_w._apply_move(moves[0], &zobrist);
+            let hash_after_move = game_w.hash.unwrap();
+
+            game_w.unmake_move();
+            let hash_after_unmake = game_w.hash.unwrap_or(game_w.compute_hash(&zobrist));
+
+            if original_hash != hash_after_unmake {
+                println!("CRITICAL BUG: unmake_move() does not restore the original hash!");
+            } else {
+                println!("PASS: make/unmake move correctly restores the hash.");
+            }
         }
     }
 }

@@ -539,7 +539,11 @@ impl Boardd {
     }
 
     pub fn print(&self) {
-        println!("Game Board:\n");
+        if !cfg!(debug_assertions) {
+            return;
+        }
+
+        log::info!("Game Board:\n");
         for rank in 0..8 {
             let mut line = String::new();
             for file in 0..8 {
@@ -554,7 +558,7 @@ impl Boardd {
                 }
             }
             line += "/";
-            println!("{}", line);
+            log::info!("{}", line);
         }
     }
 

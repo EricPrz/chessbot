@@ -1,6 +1,6 @@
 use crate::enums::Colorr;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CastlingRights {
     pub white_kingside: bool,
     pub black_kingside: bool,

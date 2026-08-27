@@ -20,10 +20,6 @@ regex = "1.13.1"
 [lib]
 path = "src/lib/mod.rs"
 
-[[bin]]
-name = "debug"
-path = "src/bin/debug.rs"
-
 [profile.dev]
 opt-level = 0
 

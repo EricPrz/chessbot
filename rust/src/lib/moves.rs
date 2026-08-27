@@ -12,7 +12,7 @@ use std::str::FromStr;
 use super::enums;
 use super::piece;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Move {
     pub from_pos: enums::Square,
     pub to_pos: enums::Square,
@@ -73,7 +73,7 @@ impl Move {
         return uci;
     }
 
-    pub fn from_uci(uci: &str, game: &mut Game) -> Option<Move> {
+    pub fn from_uci(uci: &str, game: &Game) -> Option<Move> {
         log::debug!("FEN: {}", game.get_fen());
 
         // UCI format is exactly 4 characters for normal moves, or 5 for promotions

@@ -1,6 +1,7 @@
 use crate::enums::Colorr::WHITE;
 use crate::game::Game;
 use crate::moves::Move;
+use nnue_rs::Color::White;
 use nnue_rs::{Accumulator, Board, Network};
 use rand::{Rng, RngExt};
 use std::collections::HashMap;
@@ -9,116 +10,17 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use std::time::Instant;
 
-// pub fn get_children(&mut self, net: &Network, table: &mut TranspositionTable) -> Vec<SearchNode> {
-//     let mut children = Vec::new();
-//
-//     for game_child in self.game.get_children() {
-//         let fen = game_child.get_fen();
-//         let mut child_acc = net.empty_accumulator();
-//         net.update(&self.game, &game_child, &self.acc, &mut child_acc);
-//
-//         let score: i32 = if let Some(entry) = table.map.get(&fen) {
-//             entry.score
-//         } else {
-//             let acc_eval = net.evaluate_accumulator(&child_acc, game_child.side_to_move());
-//             // println!("Acc Eval: {}", acc_eval);
-//             acc_eval
-//         };
-//
-//         let new_node = SearchNode {
-//             game: game_child,
-//             acc: child_acc,
-//             score: score,
-//             depth: self.depth + 1,
-//         };
-//
-//         if table.map.get(&fen).is_none() {
-//             table.map.insert(fen.clone(), TTEntry::new(&new_node));
-//         }
-//
-//         children.push(new_node);
-//     }
-//
-//     let is_maxing = self.game.turn == WHITE;
-//     match is_maxing {
-//         true => children.sort_by(|a, b| b.score.cmp(&a.score)),
-//         false => children.sort_by(|a, b| a.score.cmp(&b.score)),
-//     }
-//
-//     // children.sort_by(|a, b| {
-//     //     // Use move ordering heuristics instead
-//     //     let a_score = self.move_ordering_score(&a.game.last_move().unwrap());
-//     //     let b_score = self.move_ordering_score(&b.game.last_move().unwrap());
-//     //     b_score.cmp(&a_score)
-//     // });
-//
-//     children
-// }
-//
-// pub fn get_children_captures(
-//     &mut self,
-//     net: &Network,
-//     table: &mut TranspositionTable,
-// ) -> Vec<SearchNode> {
-//     let mut children = Vec::new();
-//
-//     for game_child in self.game.get_children() {
-//         if let Some(l) = game_child.last_move() {
-//             if l.captured.is_none() {
-//                 continue;
-//             }
-//         }
-//
-//         let fen = game_child.get_fen();
-//
-//         let mut child_acc = net.empty_accumulator();
-//         net.update(&self.game, &game_child, &self.acc, &mut child_acc);
-//
-//         let score: i32 = if let Some(entry) = table.map.get(&fen) {
-//             entry.score
-//         } else {
-//             let acc_eval = net.evaluate_accumulator(&child_acc, game_child.side_to_move());
-//             // println!("Acc Eval: {}", acc_eval);
-//             acc_eval
-//         };
-//
-//         let new_node = SearchNode {
-//             game: game_child,
-//             acc: child_acc,
-//             score: score,
-//             depth: self.depth + 1,
-//         };
-//
-//         if table.map.get(&fen).is_none() {
-//             table.map.insert(fen.clone(), TTEntry::new(&new_node));
-//         }
-//
-//         children.push(new_node);
-//     }
-//
-//     // children.sort_by(|a, b| {
-//     //     // Use move ordering heuristics instead
-//     //     let a_score = self.move_ordering_score(&a.game.last_move().unwrap());
-//     //     let b_score = self.move_ordering_score(&b.game.last_move().unwrap());
-//     //     b_score.cmp(&a_score)
-//     // });
-//
-//     let is_maxing = self.game.turn == WHITE;
-//     match is_maxing {
-//         true => children.sort_by(|a, b| b.score.cmp(&a.score)),
-//         false => children.sort_by(|a, b| a.score.cmp(&b.score)),
-//     }
-//
-//     children
-// }
+const QUIESCENCE_MAX_DEPTH: usize = 20;
+const TT_SIZE: usize = 1 << 22; // ~4 million entries
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone)]
 pub enum TTFlag {
     Exact,
     LowerBound,
     UpperBound,
 }
 
+#[derive(Clone)]
 pub struct TTEntry {
     pub hash: u64,
     pub depth: i32,
@@ -127,56 +29,43 @@ pub struct TTEntry {
     pub flag: TTFlag,
 }
 
-impl TTEntry {
-    // pub fn new(search_node: &SearchNode) -> TTEntry {
-    //     TTEntry {
-    //         hash: search_node.game.get_fen(),
-    //         depth: search_node.depth,
-    //         score: search_node.score,
-    //         best_move: search_node.game.last_move().cloned(),
-    //         flag: TTFlag::Exact,
-    //     }
-    // }
-}
-
+#[derive(Clone)]
 pub struct TranspositionTable {
-    pub map: HashMap<u64, TTEntry>,
+    pub entries: Vec<TTEntry>,
 }
-
 impl TranspositionTable {
-    pub fn new() -> TranspositionTable {
-        TranspositionTable {
-            map: HashMap::new(),
+    fn index(&self, hash: u64) -> usize {
+        (hash as usize) & (TT_SIZE - 1)
+    }
+
+    fn probe(&self, hash: u64) -> Option<&TTEntry> {
+        let entry = &self.entries[self.index(hash)];
+        if entry.hash == hash {
+            Some(entry)
+        } else {
+            None
         }
     }
 
-    pub fn store(
-        &mut self,
-        hash: u64,
-        depth: i32,
-        score: i32,
-        best_move: Option<Move>,
-        flag: TTFlag,
-    ) {
-        // Replacement policy: replace if deeper or if same depth with better flag type
-        if let Some(entry) = self.map.get_mut(&hash) {
-            if depth >= entry.depth {
-                entry.depth = depth;
-                entry.score = score;
-                entry.best_move = best_move;
-                entry.flag = flag;
-            }
-        } else {
-            self.map.insert(
-                hash,
+    fn store(&mut self, hash: u64, entry: TTEntry) {
+        let idx = self.index(hash);
+        // replacement: always store if new depth >= existing depth
+        if self.entries[idx].depth <= entry.depth {
+            self.entries[idx] = entry;
+        }
+    }
+    pub fn new() -> TranspositionTable {
+        TranspositionTable {
+            entries: vec![
                 TTEntry {
-                    hash,
-                    depth,
-                    score,
-                    best_move,
-                    flag,
-                },
-            );
+                    hash: 0,
+                    depth: -1,
+                    score: 0,
+                    best_move: None,
+                    flag: TTFlag::Exact,
+                };
+                TT_SIZE
+            ],
         }
     }
 }
@@ -233,7 +122,7 @@ pub fn iterative_deepening_threaded(
         }
 
         let hash = game.hash.unwrap(); // must be Some
-        if let Some(entry) = table.map.get(&hash) {
+        if let Some(entry) = table.probe(hash) {
             if entry.depth >= depth {
                 best_score = score;
                 best_move = entry.best_move;
@@ -277,39 +166,59 @@ pub fn alpha_beta_threaded(
     on_search: &Arc<AtomicBool>,
     zobrist: &Zobrist,
 ) -> i32 {
+    let alpha_orig = alpha;
+    log::debug!(
+        "alpha_beta called: depth={}, alpha={}, beta={}",
+        depth,
+        alpha,
+        beta
+    );
     // Check if we should stop
     if !on_search.load(Ordering::SeqCst) {
         // return self.score;
         return 0;
     }
 
-    println!("Node searched, depth: {}", depth);
+    log::info!("Node searched, depth: {}", depth);
 
     *nodes += 1;
 
+    let hash = game.hash.unwrap(); // must be Some
+
     if depth == 0 {
         let score = if game.is_last_move_capture() {
-            *sel_depth += 1;
-            // let mut acc = net.empty_accumulator();
-            // let parent = game.clone();
-            // net.update(&parent, game, parent_acc, &mut acc);
+            *sel_depth = 0;
 
-            0
-            // quiscence_threaded(
-            //     game, parent_acc, alpha, beta, net, table, nodes, sel_depth, on_search, zobrist,
-            // )
+            quiscence_threaded(
+                game, parent_acc, alpha, beta, net, table, nodes, sel_depth, on_search, zobrist,
+            )
         } else {
+            log::info!("Evaluating accumulator");
             net.evaluate_accumulator(parent_acc, game.side_to_move())
         };
 
-        // table.store(self, self.game.get_fen(), 0, score, None, TTFlag::Exact);
+        let ttentry = TTEntry {
+            hash: hash,
+            depth: 0,
+            score: score,
+            best_move: None,
+            flag: TTFlag::Exact,
+        };
+
+        table.store(hash, ttentry);
         return score;
     }
 
-    println!("Checking hash");
+    if game.is_threefold_repetition() || game.is_stalemate() {
+        return 0;
+    }
+
+    log::info!("Checking hash");
     // Check TT
-    let hash = game.hash.unwrap(); // must be Some
-    if let Some(entry) = table.map.get(&hash) {
+    let mut tt_move: Option<Move> = None;
+    if let Some(entry) = table.probe(hash) {
+        tt_move = entry.best_move; // Extract cached best move for ordering
+
         if entry.depth >= depth {
             if entry.flag == TTFlag::Exact {
                 return entry.score;
@@ -323,7 +232,7 @@ pub fn alpha_beta_threaded(
         }
     }
 
-    println!("Checked hash");
+    log::info!("Checked hash");
 
     // Check again before generating children
     if !on_search.load(Ordering::SeqCst) {
@@ -331,35 +240,61 @@ pub fn alpha_beta_threaded(
         return 0;
     }
 
-    println!("Move gens...");
+    log::info!("Move gens...");
     let moves_ = game.get_legal_moves();
     let parent = game.clone();
     let mut best_score = -i32::MAX;
     let mut best_move: Option<Move> = None;
 
-    for move_ in &moves_ {
-        println!("Legal Move: {}", move_.to_uci());
+    // Sort moves
+    let mut move_scores: Vec<(usize, i32)> = Vec::with_capacity(moves_.len());
+
+    for (i, &move_) in moves_.iter().enumerate() {
+        log::info!("Legal Move Generated: {}", move_.to_uci());
+        if !on_search.load(Ordering::SeqCst) {
+            break;
+        }
+
+        if Some(move_) == tt_move {
+            // Give TT move maximum possible priority to ensure it sorts first
+            move_scores.push((i, i32::MAX));
+            continue;
+        }
+
+        game._apply_move(move_, zobrist);
+        let mut acc = net.empty_accumulator();
+        net.update(&parent, game, parent_acc, &mut acc);
+
+        let score = net.evaluate_accumulator(&acc, parent.side_to_move());
+        move_scores.push((i, score));
+
+        game.unmake_move();
     }
 
+    move_scores.sort_by(|a, b| b.1.cmp(&a.1));
+
+    // Reorder moves based on sorted indices
+    let sorted_moves: Vec<Move> = move_scores.iter().map(|&i| moves_[i.0]).collect();
+    let moves_ = sorted_moves;
+
     for move_ in moves_ {
-        println!("Move: {}", &move_.to_uci());
-        println!(
+        log::info!("Move: {}", &move_.to_uci());
+        log::info!(
             "Move history: {:?}",
             game.moves
                 .iter()
                 .map(|m| m.to_uci())
                 .collect::<Vec<String>>()
         );
-        println!("Started Move applying");
+        log::info!("Started Move applying");
         // Check before each recursive call
         if !on_search.load(Ordering::SeqCst) {
             break;
         }
 
-        println!("Before move: {}", move_.to_uci());
+        log::info!("Before move: {}", move_.to_uci());
         game.board.print();
 
-        let old_hash = game.hash;
         game._apply_move(move_, zobrist);
 
         let mut acc = net.empty_accumulator();
@@ -379,22 +314,30 @@ pub fn alpha_beta_threaded(
             zobrist,
         );
 
-        println!("After move: {}", move_.to_uci());
+        log::info!("After move: {:?}", move_);
         game.board.print();
 
         game.unmake_move();
-        game.hash = old_hash;
 
-        println!("After unmake move: {}", move_.to_uci());
+        log::info!("After unmake move: {}", move_.to_uci());
         game.board.print();
 
         if score > best_score {
             best_score = score;
-            best_move = parent.last_move().cloned();
+            // best_move = parent.last_move().cloned();
+            best_move = Some(move_);
         }
 
         if score >= beta {
-            table.store(hash, depth, beta, best_move, TTFlag::LowerBound);
+            let ttentry = TTEntry {
+                hash: hash,
+                depth: depth,
+                score: beta,
+                best_move: best_move,
+                flag: TTFlag::LowerBound,
+            };
+            // table.store(hash, depth, beta, best_move, TTFlag::LowerBound);
+            table.store(hash, ttentry);
             return beta;
         }
 
@@ -402,26 +345,47 @@ pub fn alpha_beta_threaded(
             alpha = score;
         }
 
-        println!("Ended Move applying");
+        log::info!("Ended Move applying");
     }
 
     if best_move.is_none() {
         let score = if parent.is_checkmate() {
-            99999 + depth
-        } else if parent.is_stalemate() {
-            -5000
+            -30000 - depth
         } else if parent.is_draw() {
-            -5000
+            0
         } else {
             0
         };
 
-        // table.store(self, self.game.get_fen(), depth, score, None, TTFlag::Exact);
+        let ttentry = TTEntry {
+            hash: hash,
+            depth: depth,
+            score: score,
+            best_move: None,
+            flag: TTFlag::Exact,
+        };
+
+        table.store(hash, ttentry);
         return score;
     }
 
-    table.store(hash, depth, best_score, best_move, TTFlag::Exact);
+    let flag = if best_score <= alpha_orig {
+        TTFlag::UpperBound // Failed low: score is at most best_score
+    } else if best_score >= beta {
+        TTFlag::LowerBound // Failed high: score is at least best_score
+    } else {
+        TTFlag::Exact // True minimax score within (alpha, beta)
+    };
 
+    let ttentry = TTEntry {
+        hash: hash,
+        depth: depth,
+        score: best_score,
+        best_move: best_move,
+        flag: flag,
+    };
+
+    table.store(hash, ttentry);
     best_score
 }
 
@@ -437,14 +401,17 @@ pub fn quiscence_threaded(
     on_search: &Arc<AtomicBool>,
     zobrist: &Zobrist,
 ) -> i32 {
+    if *sel_depth > QUIESCENCE_MAX_DEPTH {
+        return net.evaluate_accumulator(parent_acc, game.side_to_move());
+    }
+
     // Check if we should stop
     if !on_search.load(Ordering::SeqCst) {
-        // return self.score;
         return 0;
     }
 
-    println!("Quiscence");
-    // println!("Quiscence Depth: {}", sel_depth);
+    log::info!("Quiscence");
+    log::info!("Quiscence Depth: {}", sel_depth);
 
     *nodes += 1;
 
@@ -462,32 +429,16 @@ pub fn quiscence_threaded(
         return alpha;
     }
 
-    let children = game.get_legal_captures();
-
-    if !on_search.load(Ordering::SeqCst) {
-        return alpha;
-    }
-
-    // Sort captures by MVV-LVA
-    // children.sort_by(|a, b| {
-    //     // Use MVV-LVA scoring
-    //     let a_score = &self.mvv_lva_score(&a.game.last_move().unwrap());
-    //     let b_score = &self.mvv_lva_score(&b.game.last_move().unwrap());
-    //     b_score.cmp(&a_score)
-    // });
-
-    if children.len() > 0 {
-        *sel_depth += 1;
-    }
-
     let parent_game = game.clone();
+    let children = game.get_legal_captures();
 
     for capture in children {
         if !on_search.load(Ordering::SeqCst) {
             break;
         }
 
-        let old_hash = game.hash;
+        *sel_depth += 1;
+
         game._apply_move(capture, zobrist);
         let mut child_acc = net.empty_accumulator();
         net.update(&parent_game, game, parent_acc, &mut child_acc);
@@ -497,7 +448,8 @@ pub fn quiscence_threaded(
         );
 
         game.unmake_move();
-        game.hash = old_hash;
+
+        *sel_depth -= 1;
 
         if score >= beta {
             return beta;
@@ -509,37 +461,6 @@ pub fn quiscence_threaded(
 
     alpha
 }
-
-// fn mvv_lva_score(&self, m: &Move) -> usize {
-//     // Most Valuable Victim - Least Valuable Attacker
-//     let victim_value = match m.captured {
-//         Some(p) => p.piece_type.get_value(),
-//         None => 0,
-//     } as usize;
-//     let attacker_value = match self.game.board.get_piece_at_square(m.from_pos) {
-//         Some(p) => p.piece_type.get_value(),
-//         None => 0,
-//     } as usize;
-//     (victim_value * 10) - attacker_value
-// }
-//
-// fn move_ordering_score(&self, m: &Move) -> usize {
-//     let mut score = 0;
-//
-//     // Capture moves
-//     if m.captured.is_some() {
-//         // score += 5000 + self.mvv_lva_score(m);
-//         score += self.mvv_lva_score(m);
-//     }
-//
-//     // Killer moves (from history)
-//     // score += self.killer_heuristic(m);
-//
-//     // History heuristic
-//     // score += self.history_heuristic(m);
-//
-//     score
-// }
 
 pub struct Zobrist {
     // [piece_index][square_index] – you can flatten or use 2D
