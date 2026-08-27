@@ -10,6 +10,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use std::time::Instant;
 
+const NNUE_SORT: bool = false;
 const QUIESCENCE_MAX_DEPTH: usize = 20;
 const TT_SIZE: usize = 1 << 22; // ~4 million entries
 
@@ -23,7 +24,7 @@ pub enum TTFlag {
 #[derive(Clone)]
 pub struct TTEntry {
     pub hash: u64,
-    pub depth: i32,
+    pub depth: usize,
     pub score: i32,
     pub best_move: Option<Move>,
     pub flag: TTFlag,
@@ -51,7 +52,7 @@ impl TranspositionTable {
     fn store(&mut self, hash: u64, entry: TTEntry) {
         let idx = self.index(hash);
         // replacement: always store if new depth >= existing depth
-        if self.entries[idx].depth <= entry.depth {
+        if entry.depth >= self.entries[idx].depth {
             self.entries[idx] = entry;
         }
     }
@@ -60,7 +61,7 @@ impl TranspositionTable {
             entries: vec![
                 TTEntry {
                     hash: 0,
-                    depth: -1,
+                    depth: 0,
                     score: 0,
                     best_move: None,
                     flag: TTFlag::Exact,
@@ -72,14 +73,129 @@ impl TranspositionTable {
     }
 }
 
+pub fn sort_moves(
+    game: &mut Game,
+    moves_: Vec<Move>,
+    parent: &Game,
+    parent_acc: &Accumulator,
+    tt_move: Option<Move>,
+    net: &Network,
+    zobrist: &Zobrist,
+    killers: &KillerMoves,
+    history: &HistoryTable,
+    ply: usize,
+) -> Vec<Move> {
+    let mut move_scores: Vec<(usize, i32)> = Vec::with_capacity(moves_.len());
+
+    for (i, &move_) in moves_.iter().enumerate() {
+        // If TT entry exists and has a best move, try it first
+        if Some(move_) == tt_move {
+            // Give TT move maximum possible priority to ensure it sorts first
+            move_scores.push((i, i32::MAX));
+            continue;
+        }
+
+        // Killer Moves
+        // First killer
+        if Some(move_) == killers.killers[ply][0] {
+            move_scores.push((i, 500_000));
+            continue;
+        }
+
+        // Second killer
+        if Some(move_) == killers.killers[ply][1] {
+            move_scores.push((i, 400_000));
+            continue;
+        }
+
+        // History heuristic (for non-captures)
+        if move_.captured.is_none() {
+            let color = game.side_to_move() as usize;
+            let from = move_.from_pos.to_index() as usize;
+            let to = move_.to_pos.to_index() as usize;
+
+            let score = 100_000 + history.get(color, from, to);
+            move_scores.push((i, score));
+            continue;
+        }
+
+        // MVV-LVA
+        if let Some(captured_piece) = move_.captured {
+            let victim = captured_piece.piece_type.get_value() * 100;
+            let attacker = move_.piece.piece_type.get_value() * 100;
+            let mvv_lva_score = victim as i32 * 10 - attacker as i32;
+            move_scores.push((i, mvv_lva_score));
+            continue;
+        }
+
+        // If not capture NNUE
+        if NNUE_SORT {
+            game._apply_move(move_, zobrist);
+            let mut acc = net.empty_accumulator();
+            net.update(parent, game, parent_acc, &mut acc);
+
+            let score = net.evaluate_accumulator(&acc, parent.side_to_move());
+            move_scores.push((i, score));
+
+            game.unmake_move();
+            continue;
+        }
+
+        move_scores.push((i, 0));
+    }
+
+    move_scores.sort_by(|a, b| b.1.cmp(&a.1));
+
+    // Reorder moves based on sorted indices
+    let sorted_moves: Vec<Move> = move_scores.iter().map(|&i| moves_[i.0]).collect();
+    sorted_moves
+}
+
+pub fn sort_moves_nnue(
+    game: &mut Game,
+    moves_: Vec<Move>,
+    parent: &Game,
+    parent_acc: &Accumulator,
+    tt_move: Option<Move>,
+    net: &Network,
+    zobrist: &Zobrist,
+) -> Vec<Move> {
+    let mut move_scores: Vec<(usize, i32)> = Vec::with_capacity(moves_.len());
+
+    for (i, &move_) in moves_.iter().enumerate() {
+        if Some(move_) == tt_move {
+            // Give TT move maximum possible priority to ensure it sorts first
+            move_scores.push((i, i32::MAX));
+            continue;
+        }
+
+        game._apply_move(move_, zobrist);
+        let mut acc = net.empty_accumulator();
+        net.update(parent, game, parent_acc, &mut acc);
+
+        let score = net.evaluate_accumulator(&acc, parent.side_to_move());
+        move_scores.push((i, score));
+
+        game.unmake_move();
+    }
+
+    move_scores.sort_by(|a, b| b.1.cmp(&a.1));
+
+    // Reorder moves based on sorted indices
+    let sorted_moves: Vec<Move> = move_scores.iter().map(|&i| moves_[i.0]).collect();
+    sorted_moves
+}
+
 pub fn iterative_deepening_threaded(
     game: &mut Game,
     acc: &Accumulator,
-    max_depth: i32,
+    max_depth: usize,
     net: &Network,
     table: &mut TranspositionTable,
     on_search: &Arc<AtomicBool>,
     zobrist: &Zobrist,
+    killers: &mut KillerMoves,
+    history: &mut HistoryTable,
 ) -> Option<Move> {
     // Ensure hash is initialised
     if game.hash.is_none() {
@@ -105,6 +221,7 @@ pub fn iterative_deepening_threaded(
             game,
             acc,
             depth,
+            0,
             -std::i32::MAX,
             std::i32::MAX,
             net,
@@ -114,6 +231,8 @@ pub fn iterative_deepening_threaded(
             on_search,
             zobrist,
             true,
+            killers,
+            history,
         );
 
         if !on_search.load(Ordering::SeqCst) {
@@ -159,7 +278,8 @@ pub fn iterative_deepening_threaded(
 pub fn alpha_beta_threaded(
     game: &mut Game,
     parent_acc: &Accumulator,
-    depth: i32,
+    depth: usize,
+    ply: usize,
     mut alpha: i32,
     beta: i32,
     net: &Network,
@@ -169,6 +289,8 @@ pub fn alpha_beta_threaded(
     on_search: &Arc<AtomicBool>,
     zobrist: &Zobrist,
     is_pv: bool,
+    killers: &mut KillerMoves,
+    history: &mut HistoryTable,
 ) -> i32 {
     let alpha_orig = alpha;
     log::debug!(
@@ -246,44 +368,33 @@ pub fn alpha_beta_threaded(
     }
 
     log::info!("Move gens...");
-    let moves_ = game.get_legal_moves();
     let parent = game.clone();
     let mut best_score = -i32::MAX;
     let mut best_move: Option<Move> = None;
 
     // Sort moves
-    let mut move_scores: Vec<(usize, i32)> = Vec::with_capacity(moves_.len());
+    // let sorted_moves = if NNUE_SORT {
+    //     sort_moves_nnue(game, moves_, &parent, parent_acc, tt_move, net, zobrist)
+    // } else {
+    //     sort_moves(game, moves_, &parent, parent_acc, tt_move, net, zobrist)
+    // };
 
-    for (i, &move_) in moves_.iter().enumerate() {
-        log::info!("Legal Move Generated: {}", move_.to_uci());
-        if !on_search.load(Ordering::SeqCst) {
-            break;
-        }
-
-        if Some(move_) == tt_move {
-            // Give TT move maximum possible priority to ensure it sorts first
-            move_scores.push((i, i32::MAX));
-            continue;
-        }
-
-        game._apply_move(move_, zobrist);
-        let mut acc = net.empty_accumulator();
-        net.update(&parent, game, parent_acc, &mut acc);
-
-        let score = net.evaluate_accumulator(&acc, parent.side_to_move());
-        move_scores.push((i, score));
-
-        game.unmake_move();
-    }
-
-    move_scores.sort_by(|a, b| b.1.cmp(&a.1));
-
-    // Reorder moves based on sorted indices
-    let sorted_moves: Vec<Move> = move_scores.iter().map(|&i| moves_[i.0]).collect();
-    let moves_ = sorted_moves;
+    let sorted_moves = sort_moves(
+        game,
+        game.get_legal_moves(),
+        &parent,
+        parent_acc,
+        tt_move,
+        net,
+        zobrist,
+        killers,
+        history,
+        ply,
+    );
+    let side_before = parent.turn;
 
     let mut first_move = true;
-    for move_ in moves_ {
+    for move_ in sorted_moves {
         log::info!("Move: {}", &move_.to_uci());
         log::info!(
             "Move history: {:?}",
@@ -314,6 +425,7 @@ pub fn alpha_beta_threaded(
                 game,
                 &acc,
                 depth - 1,
+                ply + 1,
                 -beta,
                 -alpha,
                 net,
@@ -323,6 +435,8 @@ pub fn alpha_beta_threaded(
                 on_search,
                 zobrist,
                 true,
+                killers,
+                history,
             );
             first_move = false;
         } else {
@@ -331,6 +445,7 @@ pub fn alpha_beta_threaded(
                 game,
                 &acc,
                 depth - 1,
+                ply + 1,
                 -alpha - 1, // Null window: (alpha, alpha+1)
                 -alpha,
                 net,
@@ -340,6 +455,8 @@ pub fn alpha_beta_threaded(
                 on_search,
                 zobrist,
                 false,
+                killers,
+                history,
             );
 
             // If the null-window search fails (score > alpha), re-search with full window
@@ -348,6 +465,7 @@ pub fn alpha_beta_threaded(
                     game,
                     &acc,
                     depth - 1,
+                    ply + 1,
                     -beta,
                     -alpha,
                     net,
@@ -357,6 +475,8 @@ pub fn alpha_beta_threaded(
                     on_search,
                     zobrist,
                     true,
+                    killers,
+                    history,
                 );
             }
         }
@@ -376,6 +496,17 @@ pub fn alpha_beta_threaded(
         }
 
         if score >= beta {
+            if move_.captured.is_none() {
+                let color = side_before as usize;
+                let from = move_.from_pos.to_index() as usize;
+                let to = move_.to_pos.to_index() as usize;
+                let bonus = depth * depth; // Deeper cuts get bigger bonus
+                history.update(color, from, to, bonus as i32);
+            }
+
+            // Update killers
+            killers.store(ply, move_);
+
             let ttentry = TTEntry {
                 hash: hash,
                 depth: depth,
@@ -384,7 +515,6 @@ pub fn alpha_beta_threaded(
                 flag: TTFlag::LowerBound,
                 is_pv: is_pv,
             };
-            // table.store(hash, depth, beta, best_move, TTFlag::LowerBound);
             table.store(hash, ttentry);
             return beta;
         }
@@ -398,7 +528,7 @@ pub fn alpha_beta_threaded(
 
     if best_move.is_none() {
         let score = if parent.is_checkmate() {
-            -30000 - depth
+            -30000 - depth as i32
         } else if parent.is_draw() {
             0
         } else {
@@ -541,5 +671,85 @@ impl Zobrist {
             table.en_passant[i] = rng.random();
         }
         table
+    }
+}
+
+pub struct KillerMoves {
+    // Store 2 killer moves for each ply (depth)
+    // ply 0 = root, ply 1 = first move, ply 2 = second move, etc.
+    killers: [[Option<Move>; 2]; 128], // Max depth 128
+}
+
+impl KillerMoves {
+    pub fn new() -> Self {
+        KillerMoves {
+            killers: [[None, None]; 128],
+        }
+    }
+
+    // Store a move that caused a beta cutoff
+    pub fn store(&mut self, ply: usize, move_: Move) {
+        // Don't store if it's already the first killer
+        if Some(move_) == self.killers[ply][0] {
+            return;
+        }
+
+        // Shift existing killers: new move becomes first
+        self.killers[ply][1] = self.killers[ply][0];
+        self.killers[ply][0] = Some(move_);
+    }
+
+    // Get killer moves for a ply
+    pub fn get(&self, ply: usize) -> [Option<Move>; 2] {
+        self.killers[ply]
+    }
+
+    // Check if a move is a killer
+    pub fn is_killer(&self, ply: usize, move_: Move) -> bool {
+        Some(move_) == self.killers[ply][0] || Some(move_) == self.killers[ply][1]
+    }
+}
+
+pub struct HistoryTable {
+    // [color][from_square][to_square]
+    // Color: 0 = white, 1 = black
+    table: [[[i32; 64]; 64]; 2],
+}
+
+impl HistoryTable {
+    pub fn new() -> Self {
+        HistoryTable {
+            table: [[[0; 64]; 64]; 2],
+        }
+    }
+
+    // Update when a move causes a beta cutoff
+    pub fn update(&mut self, color: usize, from: usize, to: usize, bonus: i32) {
+        // Bonus is usually depth * depth (deeper cuts get bigger bonuses)
+        let new_score = self.table[color][from][to] + bonus;
+
+        // Prevent overflow
+        if new_score > 1_000_000 {
+            // Decay all history values when they get too large
+            self.decay();
+        } else {
+            self.table[color][from][to] = new_score;
+        }
+    }
+
+    // Get history score for a move
+    pub fn get(&self, color: usize, from: usize, to: usize) -> i32 {
+        self.table[color][from][to]
+    }
+
+    // Decay all values to prevent overflow and give recent moves more weight
+    fn decay(&mut self) {
+        for color in 0..2 {
+            for from in 0..64 {
+                for to in 0..64 {
+                    self.table[color][from][to] /= 2;
+                }
+            }
+        }
     }
 }

@@ -4,11 +4,14 @@ use std::thread;
 
 use chess_engine::game::Game;
 use chess_engine::moves::Move;
-use chess_engine::search::{TranspositionTable, Zobrist, iterative_deepening_threaded};
+use chess_engine::piece::KingMoves;
+use chess_engine::search::{
+    HistoryTable, KillerMoves, TranspositionTable, Zobrist, iterative_deepening_threaded,
+};
 use flexi_logger::{Duplicate, FileSpec, Logger};
 use nnue_rs::{Accumulator, Network};
 
-const MAX_DEPTH: i32 = 6;
+const MAX_DEPTH: usize = 6;
 
 // Pseudocode for the 'uci' command response
 fn handle_uci() {
@@ -74,17 +77,30 @@ fn handle_go_threaded(
     table: Arc<RwLock<TranspositionTable>>,
     on_search: &Arc<AtomicBool>,
     zobrist: &Zobrist,
+    killers: Arc<RwLock<KillerMoves>>,
+    history: Arc<RwLock<HistoryTable>>,
 ) -> Option<Move> {
     log::info!("Search started in thread");
 
     // let mut search_node = SearchNode::new_root(game, net, table);
     let mut table = table.write().unwrap();
+    let mut killers = killers.write().unwrap();
+    let mut history = history.write().unwrap();
     // Convert AtomicBool to a mutable reference for the search
     // We'll use a wrapper to check the flag
     // let final_move = search_node.iterative_deepening_threaded(MAX_DEPTH, net, table, on_search);
     let acc = net.accumulator(game);
-    let final_move =
-        iterative_deepening_threaded(game, &acc, MAX_DEPTH, net, &mut *table, on_search, zobrist);
+    let final_move = iterative_deepening_threaded(
+        game,
+        &acc,
+        MAX_DEPTH,
+        net,
+        &mut *table,
+        on_search,
+        zobrist,
+        &mut *killers,
+        &mut *history,
+    );
 
     log::info!("Ended go");
 
@@ -130,6 +146,8 @@ fn main() {
         Network::from_file("/home/eric/Projects/chessbot/rust/src/nn-47fc8b7fff06.nnue").unwrap(),
     );
     let table = Arc::new(RwLock::new(TranspositionTable::new()));
+    let killers = Arc::new(RwLock::new(KillerMoves::new()));
+    let history = Arc::new(RwLock::new(HistoryTable::new()));
     let mut game = Game::new();
 
     let on_search = Arc::new(AtomicBool::new(false));
@@ -163,6 +181,8 @@ fn main() {
                 let mut game_clone = game.clone();
 
                 let table_clone = Arc::clone(&table);
+                let killers_clone = Arc::clone(&killers);
+                let history_clone = Arc::clone(&history);
                 let on_search_clone = Arc::clone(&on_search);
 
                 let zobrist_clone = Arc::clone(&zobrist); // clone for thread
@@ -174,6 +194,8 @@ fn main() {
                         table_clone,
                         &on_search_clone,
                         &*zobrist_clone,
+                        killers_clone,
+                        history_clone,
                     );
                     result
                 }));
