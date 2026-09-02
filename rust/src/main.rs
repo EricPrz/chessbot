@@ -1,6 +1,9 @@
+use std::error::Error;
+use std::fs::File;
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
-use std::thread;
+use std::{env, thread};
 
 use chess_engine::game::Game;
 use chess_engine::moves::Move;
@@ -10,6 +13,7 @@ use chess_engine::search::{
 };
 use flexi_logger::{Duplicate, FileSpec, Logger};
 use nnue_rs::{Accumulator, Network};
+use reqwest::Response;
 
 const MAX_DEPTH: usize = 6;
 
@@ -131,9 +135,24 @@ fn handle_stop(on_search: &mut Arc<AtomicBool>) {
     log::info!("stop");
 }
 
-fn main() {
-    // Initialize essentials
+fn main() -> Result<(), Box<dyn Error>> {
+    let mut nnue_filename = env::current_exe().expect("Failed to get current executable path");
+    println!("env: {}", nnue_filename.to_str().unwrap());
+    nnue_filename.pop();
+    nnue_filename.push("nn-47fc8b7fff06.nnue");
 
+    let nnue_filename = nnue_filename.to_str().unwrap();
+
+    // Download the specific version nnue-rs expects if it isn't here yet
+    if !Path::new(nnue_filename).exists() {
+        log::info!("NNUE file not found, downloading...");
+        let mut res =
+            reqwest::blocking::get("https://tests.stockfishchess.org/api/nn/nn-47fc8b7fff06.nnue")?;
+        let mut file = File::create(nnue_filename)?;
+        res.copy_to(&mut file)?;
+    }
+
+    let net = Arc::new(Network::from_file(nnue_filename).unwrap());
     // let logger = Logger::try_with_str(spec)
     let logger = Logger::try_with_str("info")
         .unwrap()
@@ -212,7 +231,7 @@ fn main() {
                 if let Some(thread) = search_thread.take() {
                     let _ = thread.join();
                 }
-                break;
+                return Ok(());
             }
             _ => {} // Ignore unknown commands
         }
